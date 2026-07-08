@@ -25,24 +25,19 @@ Python 側からほぼ Unity C# と同じ構文で呼び出せます。
 
 Python の「ユーザークライアント」「ミドルウェア」と Unity の「C# サーバー」の3プロセス構成です。
 
-```plantuml
-@startuml
-skinparam NodeSep 100
-rectangle "User Python Process"{
-  rectangle lliquidlink.client as PythonClient 
-}
-
-rectangle "Python Middleware Process"{
-  rectangle lliquidlink.server as PythonServer 
-}
-
-rectangle "Unity Editor Process (C#)"{
-  rectangle UniLiquidLink.Server as Sharp 
-} 
-
-PythonClient <-right-> PythonServer : tcp
-PythonServer <-right-> Sharp : stdio
-@enduml
+```mermaid
+flowchart LR
+    subgraph SG1["User Python Process"]
+        PythonClient["lliquidlink.client"]
+    end
+    subgraph SG2["Python Middleware Process"]
+        PythonServer["lliquidlink.server"]
+    end
+    subgraph SG3["Unity Editor Process (C#)"]
+        Sharp["UniLiquidLink.Server"]
+    end
+    PythonClient <-->|tcp| PythonServer
+    PythonServer <-->|stdio| Sharp
 ```
 
 ## インストール方法

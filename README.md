@@ -34,25 +34,21 @@ It lets you call Unity from Python using almost the same syntax as Unity C#.
 
 A 3-process configuration consisting of the Python "user client", the "middleware", and the Unity "C# server".
 
-```plantuml
-@startuml
-skinparam NodeSep 100
-rectangle "User Python Process"{
-  rectangle lliquidlink.client as PythonClient 
-}
-
-rectangle "Python Middleware Process"{
-  rectangle lliquidlink.server as PythonServer 
-}
-
-rectangle "Unity Editor Process (C#)"{
-  rectangle UniLiquidLink.Server as Sharp 
-} 
-
-PythonClient <-right-> PythonServer : tcp
-PythonServer <-right-> Sharp : stdio
-@enduml
+```mermaid
+flowchart LR
+    subgraph SG1["User Python Process"]
+        PythonClient["lliquidlink.client"]
+    end
+    subgraph SG2["Python Middleware Process"]
+        PythonServer["lliquidlink.server"]
+    end
+    subgraph SG3["Unity Editor Process (C#)"]
+        Sharp["UniLiquidLink.Server"]
+    end
+    PythonClient <-->|tcp| PythonServer
+    PythonServer <-->|stdio| Sharp
 ```
+
 
 ## Installation
 
