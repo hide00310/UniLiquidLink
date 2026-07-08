@@ -74,7 +74,10 @@ flowchart LR
 
 `Samples/CubeDemo` の最小サンプルで動作確認できます。
 
-1. Unity メニューから `UniLiquidLink/Samples/Cube Demo Server Start` を実行し、C# 側のサーバーを起動します（既定で `http://localhost:8700` で待ち受けます）。
+1. Unity メニューから `UniLiquidLink/Samples/Cube Demo Server Window` を実行し、
+Pythonミドルウェアのスタートコマンドを設定します
+例 : `python Samples/CubeDemo/run_middleware_server.py`
+C# 側のサーバーを起動します（既定で `http://localhost:8700` で待ち受けます）。
 
    ```csharp
    // Samples/CubeDemo/CubeDemoServer.cs (抜粋)

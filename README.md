@@ -84,7 +84,10 @@ At this time, neither a Unity Package Manager (UPM) `package.json` nor a Python 
 
 You can verify it works using the minimal sample in `Samples/CubeDemo`.
 
-1. From the Unity menu, run `UniLiquidLink/Samples/Cube Demo Server Start` to start the C# server (by default it listens on `http://localhost:8700`).
+1. Run `UniLiquidLink/Samples/Cube Demo Server Window` from the Unity menu,
+and configure the command to start the Python middleware.
+Example: `python Samples/CubeDemo/run_middleware_server.py`
+Start the server on the C# side (it listens on `http://localhost:8700` by default).
 
    ```csharp
    // Samples/CubeDemo/CubeDemoServer.cs (excerpt)
