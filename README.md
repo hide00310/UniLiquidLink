@@ -104,25 +104,21 @@ You can verify it works using the minimal sample in `Samples/CubeDemo`.
    python Samples/CubeDemo/create_and_rotate_cube.py
    ```
 
-   ```python
-   # Samples/CubeDemo/create_and_rotate_cube.py (excerpt)
-   from lliquidlink.client import Client, TcpJsonRpcTransport
-   from lliquidlink.client.models import type_, enum
+  ```python
+  # Samples/CubeDemo/create_and_rotate_cube.py (excerpt)
+  from lliquidlink.client import Client, TcpJsonRpcTransport
+  from lliquidlink.client.models import type_, enum
 
-   class CubeDemoClient(Client):
-       def __init__(self):
-           super().__init__(TcpJsonRpcTransport("http://localhost", 8700))
-           self.on_execute += self._on_execute
+  def on_execute(client):
+      cube = client.GameObject.CreatePrimitive(enum("Cube"))
+      renderer = cube.GetComponent(type_("Renderer"))
+      renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
+      cube.transform.Rotate(30, 45, 0)
 
-       def _on_execute(self, client):
-           cube = client.GameObject.CreatePrimitive(enum("Cube"))
-           renderer = cube.GetComponent(type_("Renderer"))
-           renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
-           cube.transform.Rotate(30, 45, 0)
-
-   client = CubeDemoClient()
-   client.mainloop()
-   ```
+  client = Client(TcpJsonRpcTransport("localhost", 8700))
+  client.on_execute += on_execute
+  client.mainloop()
+  ```
 
    When run, a red Cube is created in the Unity scene and rotates.
 

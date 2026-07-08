@@ -94,21 +94,21 @@ flowchart LR
    python Samples/CubeDemo/create_and_rotate_cube.py
    ```
 
-   ```python
-   # Samples/CubeDemo/create_and_rotate_cube.py (抜粋)
-   from lliquidlink.client import Client, TcpJsonRpcTransport
-   from lliquidlink.client.models import type_, enum
+  ```python
+  # Samples/CubeDemo/create_and_rotate_cube.py (excerpt)
+  from lliquidlink.client import Client, TcpJsonRpcTransport
+  from lliquidlink.client.models import type_, enum
 
-    def on_execute(client):
-        cube = client.GameObject.CreatePrimitive(enum("Cube"))
-        renderer = cube.GetComponent(type_("Renderer"))
-        renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
-        cube.transform.Rotate(30, 45, 0)
+  def on_execute(client):
+      cube = client.GameObject.CreatePrimitive(enum("Cube"))
+      renderer = cube.GetComponent(type_("Renderer"))
+      renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
+      cube.transform.Rotate(30, 45, 0)
 
-    client = Client(TcpJsonRpcTransport("localhost", 8700))
-    client.on_execute += on_execute
-    client.mainloop()
-   ```
+  client = Client(TcpJsonRpcTransport("localhost", 8700))
+  client.on_execute += on_execute
+  client.mainloop()
+  ```
 
    実行すると、Unity シーン内に赤い Cube が生成され、回転します。
 
