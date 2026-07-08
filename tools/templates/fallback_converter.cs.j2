@@ -1,0 +1,57 @@
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+//{% if extra_usings %}
+//{% if extra_usings is iterable and extra_usings is not string %}
+//{% for u in extra_usings %}
+using {{ u }};
+//{% endfor %}
+//{% else %}
+using {{ extra_usings }};
+//{% endif %}
+//{% endif %}
+
+//{% if namespace %}
+namespace {{ namespace }}
+{
+//{% endif %}
+    /// <summary>Routes matching value types to JsonUtility so System.Text.Json can compose them inside collections.</summary>
+    public class {{ class_name }} : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return {{ can_convert_expr }};
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(JsonUtilityConverter<>).MakeGenericType(typeToConvert));
+        }
+    }
+
+    /// <summary>Delegates single-value (de)serialization to Unity's JsonUtility, bridging System.Text.Json tokens via a raw JSON string.</summary>
+    internal class JsonUtilityConverter<T> : JsonConverter<T>
+    {
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            using (var doc = JsonDocument.ParseValue(ref reader))
+            {
+                string rawJson = doc.RootElement.GetRawText();
+                object result;
+                {{ deserialize_expr }};
+                return (T)result;
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        {
+            string json = {{ serialize_expr }};
+            using (var doc = JsonDocument.Parse(json))
+            {
+                doc.RootElement.WriteTo(writer);
+            }
+        }
+    }
+//{% if namespace %}
+}
+//{% endif %}

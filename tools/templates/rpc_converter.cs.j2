@@ -1,0 +1,111 @@
+using System;
+using System.Text.Json;
+//{% if extra_usings %}
+//{% if extra_usings is iterable and extra_usings is not string %}
+//{% for u in extra_usings %}
+using {{ u }};
+//{% endfor %}
+//{% else %}
+using {{ extra_usings }};
+//{% endif %}
+//{% endif %}
+
+//{% if namespace %}
+namespace {{ namespace }}
+{
+//{% endif %}
+
+//{% set field_prefix = ctor_field_visibility ~ " readonly" if ctor_field_visibility else "readonly" %}
+//{% set class_header = class_name ~ ("<" ~ type_param ~ ">" if type_param else "") %}
+//{% set base_clause = "RpcJsonConverter<" ~ org_type_cs ~ ", " ~ rpc_type ~ ">" ~ (" " ~ type_constraint if type_constraint else "") %}
+    public class {{ class_header }} : {{ base_clause }}
+    {
+//{% if ctor_param_type %}
+        {{ field_prefix }} {{ ctor_param_type }} _{{ ctor_param_name }};
+
+        public {{ class_name }}({{ ctor_param_type }} {{ ctor_param_name }})
+        {
+            _{{ ctor_param_name }} = {{ ctor_param_name }};
+        }
+//{% endif %}
+//{% if can_convert_expr %}
+
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return {{ can_convert_expr }};
+        }
+//{% endif %}
+
+        public override {{ org_type_cs }} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+//{% if read_raw_expr %}
+            return {{ read_raw_expr }};
+//{% else %}
+            var rpcObj = JsonSerializer.Deserialize<{{ rpc_type }}>(ref reader, DtoOptions);
+            if (rpcObj == null)
+            {
+                return null;
+            }
+
+//{% if read_throw_expr %}
+            var ret = {{ read_return_expr }};
+            if (ret == null) throw new {{ read_throw_expr }};
+
+
+//{% if after_deserialize %}
+//{% if after_deserialize is iterable and after_deserialize is not string %}
+//{% for line in after_deserialize %}
+            {{ line }};
+//{% endfor %}
+//{% else %}
+            {{ after_deserialize }};
+//{% endif %}
+            return ret;
+//{% endif %}
+//{% else %}
+            return {{ read_return_expr }};
+//{% endif %}
+//{% endif %}
+        }
+
+        public override void Write(Utf8JsonWriter writer, {{ org_type_cs }} value, JsonSerializerOptions options)
+        {
+            if (value == null) { writer.WriteNullValue(); return; }
+//{% if write_raw_expr %}
+//{% if write_raw_expr is iterable and write_raw_expr is not string %}
+//{% for line in write_raw_expr %}
+            {{ line }};
+//{% endfor %}
+//{% else %}
+            {{ write_raw_expr }};
+//{% endif %}
+//{% else %}
+//{% if write_pre %}
+//{% if write_pre is iterable and write_pre is not string %}
+//{% for line in write_pre %}
+            {{ line }};
+//{% endfor %}
+//{% else %}
+            {{ write_pre }};
+//{% endif %}
+//{% endif %}
+//{% if write_fields | length == 1 %}
+            JsonSerializer.Serialize(writer, new {{ rpc_type }} { {{ write_fields[0].key }} = {{ write_fields[0].val }} }, DtoOptions);
+//{% else %}
+            JsonSerializer.Serialize(writer, new {{ rpc_type }}
+            {
+//{% for f in write_fields %}
+                {{ f.key }} = {{ f.val }}{{ "," if not loop.last }}
+//{% endfor %}
+            }, DtoOptions);
+//{% endif %}
+//{% endif %}
+        }
+    }
+//{% if namespace %}
+}
+//{% endif %}

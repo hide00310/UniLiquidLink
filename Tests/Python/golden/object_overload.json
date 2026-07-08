@@ -1,0 +1,10 @@
+{
+  "GameObject": {
+    "orgType": "UnityEngine.GameObject",
+    "name": "UniLiquidLinkTestObject"
+  },
+  "Transform": {
+    "orgType": "UnityEngine.Transform",
+    "name": "UniLiquidLinkTestObject"
+  }
+}
