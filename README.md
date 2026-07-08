@@ -1,4 +1,5 @@
 [日本語](README.ja.md)
+<img width="746" height="396" alt="Sample" src="https://github.com/user-attachments/assets/963d5cc6-74e0-49db-a20f-94c0a5b017fd" />
 
 # LLiquidLink / UniLiquidLink
 
