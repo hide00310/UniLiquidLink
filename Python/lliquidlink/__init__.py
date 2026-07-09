@@ -5,3 +5,5 @@ Subpackages:
     lliquidlink.client - Client that connects to a Unity Editor server.
     lliquidlink.server - Server middleware bridging external clients to Unity over stdio.
 """
+
+__version__ = "0.1.0"
