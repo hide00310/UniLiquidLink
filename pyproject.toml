@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lliquidlink"
-version = "0.1.0"
+version = "1.0.0"
 description = "A bridge library for operating Unity Editor features from an external Python process via JSON-RPC."
 readme = "README.md"
 license = "MIT"
