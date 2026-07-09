@@ -128,6 +128,8 @@ InitTestScene*.unity*
 
 # Python
 __pycache__/
+/dist/
+*.egg-info/
 
 *.csv
 *.html

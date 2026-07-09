@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lliquidlink"
+version = "0.1.0"
+description = "A bridge library for operating Unity Editor features from an external Python process via JSON-RPC."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "hide00310" }]
+dependencies = [
+    "anyio",
+    "numpy",
+    "pandas",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
+[project.urls]
+Homepage = "https://github.com/hide00310/UniLiquidLink"
+
+[tool.hatch.build.targets.wheel]
+packages = ["Python/lliquidlink"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["Python"]
+testpaths = ["Tests/Python"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["Python/lliquidlink/__init__.py:__version__"]
+branch = "main"
+build_command = "pip install build && python -m build"
+major_on_zero = false
+commit_parser = "angular"
