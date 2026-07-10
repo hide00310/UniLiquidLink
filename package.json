@@ -1,0 +1,34 @@
+{
+  "name": "com.hide00310.uniliquidlink",
+  "version": "0.1.0",
+  "displayName": "UniLiquidLink",
+  "description": "A bridge library for operating Unity Editor features from an external Python process via JSON-RPC.",
+  "unity": "2022.3",
+  "license": "MIT",
+  "author": {
+    "name": "hide00310",
+    "url": "https://github.com/hide00310"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hide00310/UniLiquidLink.git"
+  },
+  "keywords": [
+    "json-rpc",
+    "editor-automation",
+    "python",
+    "rpc"
+  ],
+  "samples": [
+    {
+      "displayName": "Cube Demo",
+      "description": "Minimal sample that creates and rotates a cube from Python via JSON-RPC.",
+      "path": "Samples~/CubeDemo"
+    },
+    {
+      "displayName": "All Features Tour",
+      "description": "A tour sample exercising the full set of UniLiquidLink RPC features.",
+      "path": "Samples~/AllFeaturesTour"
+    }
+  ]
+}

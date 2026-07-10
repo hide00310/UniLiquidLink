@@ -124,8 +124,6 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
-*.meta
-
 # Python
 __pycache__/
 /dist/
