@@ -70,7 +70,7 @@ A Python pip package is not distributed yet. Please set up the Python side manua
 
 ### Python side
 
-1. Since it is not distributed as a pip package, add the `Python/` directory to `PYTHONPATH` to use it.
+1. Since it is not distributed as a pip package, add the `Python~/` directory to `PYTHONPATH` to use it.
 
 2. Install the library required for execution.
 
