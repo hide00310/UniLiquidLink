@@ -108,7 +108,7 @@ namespace UniLiquidLink
                     _pythonProcess.StandardError.BaseStream
                 );
                 IsRunning = true;
-                Logger.Info("Server started (stdio mode)");
+                Logger.Info("Server started (stdio mode) in "+ workDir);
                 return;
             }
 

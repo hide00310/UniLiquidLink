@@ -12,13 +12,6 @@ Usage::
 """
 import logging
 
-from ._client import Client, gc_flush
-from ._event import Event
-from ._proxy import ObjectProxy, PropertyProxy
-from ._transports import StdioJsonRpcTransport, TcpJsonRpcTransport
-from ..core import ConnectionClosedError, RpcError
-from . import models
-
 logger = logging.getLogger("lliquidlink.client")
 
 def setup_logger():
@@ -28,7 +21,9 @@ def setup_logger():
     h.setLevel(level)
     logger.addHandler(h)
     logger.setLevel(level)
+    from .. import core
     for name in [
+        core.__name__,
         # "anyio", "websockets"
     ]:
         _logger = logging.getLogger(name)
@@ -36,6 +31,13 @@ def setup_logger():
             _logger.addHandler(h)
         _logger.setLevel(logger.level)
 setup_logger()
+
+from ._client import Client, gc_flush
+from ._event import Event
+from ._proxy import ObjectProxy, PropertyProxy
+from ._transports import StdioJsonRpcTransport, TcpJsonRpcTransport
+from ..core import ConnectionClosedError, RpcError
+from . import models
 
 __all__ = [
     "Client",

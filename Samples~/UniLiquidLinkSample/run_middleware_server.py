@@ -14,8 +14,6 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
-
 from lliquidlink.server.server import Server
 from lliquidlink.server._transport import TcpServerTransport
 

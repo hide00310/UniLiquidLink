@@ -1,4 +1,3 @@
-from .server import main
 import logging
 import os
 
@@ -18,7 +17,9 @@ def setup_logger():
     logger.addHandler(h)
     logger.setLevel(level)
 
+    from .. import core
     for name in [
+        core.__name__,
         # "anyio", "websockets"
     ]:
         _logger = logging.getLogger(name)
@@ -26,4 +27,6 @@ def setup_logger():
             _logger.addHandler(h)
         _logger.setLevel(level)
 setup_logger()
+
+from .server import main
 __all__ = ["main"]
