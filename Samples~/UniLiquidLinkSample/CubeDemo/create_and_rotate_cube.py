@@ -8,7 +8,7 @@ Prerequisites:
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
+# sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
 
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum

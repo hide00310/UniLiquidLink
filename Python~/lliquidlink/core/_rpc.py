@@ -139,6 +139,7 @@ class JsonRpcPeer:
 
     def _reject_all(self, error: Exception) -> None:
         self._closed = True
+        logger.debug("JsonRpcPeer._reject_all %s", error)
         for slot in self._pending.values():
             if not slot.event.is_set():
                 slot.error = error
@@ -147,6 +148,7 @@ class JsonRpcPeer:
 
     async def aclose(self) -> None:
         self._closed = True
+        logger.debug("JsonRpcPeer.aclose")
         await self._stream.aclose()
 
 
