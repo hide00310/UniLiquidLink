@@ -2,13 +2,13 @@
 Cube Demo — create a red cube and rotate it once.
 
 Prerequisites:
-  1. In Unity, run menu: UniLiquidLink/Samples/Cube Demo Server Start
+  1. In Unity, open menu: UniLiquidLink/Samples/Sample Window, select "Cube Demo", then press Start
   2. Run this script:
 """
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
+# sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
 
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum

@@ -34,7 +34,7 @@ class Server <<partial>> {
     + Server(pythonServerStartCommand:string, transport:ITransportServer, dispatcher:IMainThreadDispatcher)
     + Start() : void
     - {static} GetCurrentDirectory(path:string) : string
-    - {static} GetWebSocketLibDirectory(path:string) : string
+    - {static} GetRootLibDirectory(path:string) : string
     - {static} GetPythonDirectory(path:string) : string
     - StartPythonMiddleware(pythonServerStartCommand:string) : Process
     + RegisterObject(obj:UnityEngine.Object) : void

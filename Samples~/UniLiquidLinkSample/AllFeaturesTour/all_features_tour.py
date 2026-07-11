@@ -26,7 +26,6 @@ def on_execute(client):
 
     # ── Simple method calls ───────────────────────────────────────────────────
     print("=== Simple methods ===")
-    print("SampleMethodInt(42):", client.SampleMethodInt(42))
     print("SampleMethodIntStr(42, 'hello'):", client.SampleMethodIntStr(42, "hello"))
 
     # ── GameObject.Find — direct call and class-chain call ────────────────────
@@ -37,27 +36,16 @@ def on_execute(client):
     go2 = client.GameObject.Find(DEMO_OBJECT)
     print("Find (class chain):", go2)
 
-    # ── Primitive values: int / str / bool ───────────────────────────────────
-    print("\n=== Primitive round-trips ===")
-    print("SamplePrimitiveObject(42):", client.SamplePrimitiveObject(42))
-    print("SamplePrimitiveObject('hello'):", client.SamplePrimitiveObject("hello"))
-    print("SamplePrimitiveObject(True):", client.SamplePrimitiveObject(True))
-
     # ── GameObject: single, array, list, dict ────────────────────────────────
     print("\n=== GameObject collections ===")
     print("SampleGameObject(go):", client.SampleGameObject(go))
     print("SampleGameObjectArray([go, go]):", client.SampleGameObjectArray([go, go]))
-    print("SampleGameObjectList([go, go]):", client.SampleGameObjectList([go, go]))
     print("SampleGameObjectDict({'a':go,'b':go}):", client.SampleGameObjectDict({"a": go, "b": go}))
 
     # ── Vector3: single, array, list, dict ───────────────────────────────────
     print("\n=== Vector3 collections ===")
     v = {"x": 1, "y": 2, "z": 3}
-    w = {"x": 4, "y": 5, "z": 6}
     print("SampleVector3:", client.SampleVector3(v))
-    print("SampleVector3Array:", client.SampleVector3Array([v, w]))
-    print("SampleVector3List:", client.SampleVector3List([v, w]))
-    print("SampleVector3Dict:", client.SampleVector3Dict({"a": v, "b": w}))
 
     # ── Enum argument ─────────────────────────────────────────────────────────
     print("\n=== Enum argument ===")
@@ -69,15 +57,11 @@ def on_execute(client):
     print("go.transform():", transform)
     print("go.transform.position():", go.transform.position())
     print("go.name():", go.name())
-    print("go.activeSelf():", go.activeSelf())
-    print("go.hideFlags():", go.hideFlags())
 
     # ── Property set (position), then restore ────────────────────────────────
     print("\n=== Property set (chain resolution) ===")
     go.transform.position = {"x": 1, "y": 2, "z": 3}
     print("After set, go.transform.position():", go.transform.position())
-    go.transform.position = {"x": 0, "y": 0, "z": 0}
-    print("Restored position:", go.transform.position())
 
     # ── Chained property access: transform.gameObject ────────────────────────
     print("\n=== Chained property ===")
@@ -89,12 +73,8 @@ def on_execute(client):
     print("go.transform.Rotate(10, 20, 30):", result)
 
     # ── Load asset by type ────────────────────────────────────────────────────
-    print("\n=== Asset loading with type_ ===")
-    mat = client.LoadAssetAtPath(DEMO_ASSET, type_("Material"))
-    print("LoadAssetAtPath:", mat)
-
-    mat2 = client.AssetDatabase.LoadAssetAtPath(DEMO_ASSET, type_("Material"))
-    print("AssetDatabase.LoadAssetAtPath:", mat2)
+    mat = client.AssetDatabase.LoadAssetAtPath(DEMO_ASSET, type_("Material"))
+    print("AssetDatabase.LoadAssetAtPath:", mat)
 
     # ── add_abbreviated_classes / add_abbreviated_namespaces ─────────────────
     # (already called at the top; the calls above show the effect)
@@ -109,17 +89,6 @@ def on_execute(client):
     t = go.transform()
     print("SampleClass.ObjectOverload(go):", client.SampleClass.ObjectOverload(go))
     print("SampleClass.ObjectOverload(transform):", client.SampleClass.ObjectOverload(t))
-    print("SampleClass.ObjectMethod(go):", client.SampleClass.ObjectMethod(go))
-
-    # ── Error handling: calling a method that does not exist ──────────────────
-    print("\n=== Error handling ===")
-    try:
-        client.NoSuchMethod999()
-        print("ERROR: expected an exception but none was raised")
-    except RpcError as e:
-        print(f"RpcError caught (as expected): {e}")
-    except Exception as e:
-        print(f"Exception caught: {type(e).__name__}: {e}")
 
 if __name__ == "__main__":
     client = Client(TcpJsonRpcTransport("localhost", 8700))

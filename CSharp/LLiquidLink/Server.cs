@@ -114,7 +114,11 @@ namespace LLiquidLink
             var bus = BuildCoreStack(out JsonSerializerOptions jsonOptions);
             _stdioTransport = new StdioTransport(_dispatcher, bus, jsonOptions, () => Logger, ex => OnError?.Invoke(ex));
             _stdioTransport.OnConnect += id => { _connectedClients.Add(id); Logger.Info("Python middleware connected"); };
-            _stdioTransport.OnDisconnect += id => { _connectedClients.Remove(id); Logger.Info("Python middleware disconnected"); OnDisconnect?.Invoke(id); };
+            _stdioTransport.OnDisconnect += id => { 
+                _connectedClients.Remove(id); 
+                Logger.Info("Python middleware disconnected"); 
+                OnDisconnect?.Invoke(id); 
+            };
             bus.Register("OnServerError", (Action<string>)(msg =>
             {
                 Logger.Info("Python server error: " + msg);

@@ -104,9 +104,11 @@ namespace UniLiquidLink
                 _pythonProcess = StartPythonMiddleware(_pythonServerStartCommand);
                 _stdioTransport.Start(
                     _pythonProcess.StandardOutput.BaseStream,
-                    _pythonProcess.StandardInput.BaseStream);
+                    _pythonProcess.StandardInput.BaseStream,
+                    _pythonProcess.StandardError.BaseStream
+                );
                 IsRunning = true;
-                Logger.Info("Server started (stdio mode)");
+                Logger.Info("Server started (stdio mode) in "+ workDir);
                 return;
             }
 
@@ -143,43 +145,26 @@ namespace UniLiquidLink
             return Path.GetFullPath(Path.Combine(csharpUnityDir, "..", "..", ".."));
         }
 
-        // Resolve the "Python~" package directory next to this source file (/Python~).
-        // The trailing "~" excludes it from Unity's AssetDatabase import/Project view.
-        // Exposed via PYTHONPATH (not as the process's working directory) so that
-        // `python -m lliquidlink.server` can import the lliquidlink package without a global pip
-        // install, while the working directory stays at WebSocketLib root so the middleware's
-        // relative rpc_names.csv / type_names.csv lookups (written there by Start()) still resolve.
-        private static string GetPythonDirectory([CallerFilePath] string path = null)
-        {
-            string dir = GetRootLibDirectory(path);
-            return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, "Python~");
-        }
-
         Process StartPythonMiddleware(string pythonServerStartCommand)
         {
             string workDir = WorkingDirectory
                 ?? GetRootLibDirectory();
             string[] cmds = pythonServerStartCommand.Split(" ");
+            string fileName = cmds[0];
+            string arguments = string.Join(" ", cmds, 1, cmds.Length - 1);
             var psi = new ProcessStartInfo
             {
-                FileName = cmds[0],
-                Arguments = string.Join(" ", cmds, 1, cmds.Length - 1),
+                FileName = fileName,
+                Arguments = arguments,
                 UseShellExecute = false,
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = false,
-                CreateNoWindow = true,
+                RedirectStandardError = true,
+                CreateNoWindow = false,
                 WorkingDirectory = workDir
             };
-            string pythonDir = GetPythonDirectory();
-            string existingPythonPath = psi.EnvironmentVariables.ContainsKey("PYTHONPATH")
-                ? psi.EnvironmentVariables["PYTHONPATH"]
-                : null;
-            psi.EnvironmentVariables["PYTHONPATH"] = string.IsNullOrEmpty(existingPythonPath)
-                ? pythonDir
-                : pythonDir + Path.PathSeparator + existingPythonPath;
             var p = Process.Start(psi);
-            Logger.Info("Python middleware started (pid=" + p.Id + ")");
+            Logger.Info($"Python middleware started (pid={p.Id}, cmd={fileName} {arguments})");
             return p;
         }
 

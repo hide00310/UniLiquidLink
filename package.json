@@ -21,14 +21,9 @@
   ],
   "samples": [
     {
-      "displayName": "Cube Demo",
-      "description": "Minimal sample that creates and rotates a cube from Python via JSON-RPC.",
-      "path": "Samples~/CubeDemo"
-    },
-    {
-      "displayName": "All Features Tour",
-      "description": "A tour sample exercising the full set of UniLiquidLink RPC features.",
-      "path": "Samples~/AllFeaturesTour"
+      "displayName": "UniLiquidLink Samples",
+      "description": "Cube Demo and All Features Tour in a single sample window covering JSON-RPC bridge basics and the full feature set.",
+      "path": "Samples~/UniLiquidLinkSample"
     }
   ]
 }

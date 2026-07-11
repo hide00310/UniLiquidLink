@@ -2,6 +2,7 @@ using LLiquidLink.Logger;
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 
@@ -19,7 +20,9 @@ namespace LLiquidLink
 
         Stream _in;
         Stream _out;
+        Stream _err;
         Thread _readThread;
+        Thread _errReadThread;
         bool _running;
 
         const int ClientId = 1;
@@ -48,13 +51,16 @@ namespace LLiquidLink
         /// <summary>Start the read loop on a background thread and fire OnConnect.</summary>
         /// <param name="inStream">Stream to read requests from (Python middleware's stdout).</param>
         /// <param name="outStream">Stream to write responses to (Python middleware's stdin).</param>
-        public void Start(Stream inStream, Stream outStream)
+        public void Start(Stream inStream, Stream outStream, Stream errStream)
         {
             _in = inStream;
             _out = outStream;
+            _err = errStream;
             _running = true;
             _readThread = new Thread(ReadLoop) { IsBackground = true, Name = "StdioTransport" };
             _readThread.Start();
+            _errReadThread = new Thread(ErrorReadLoop) { IsBackground = true, Name = "StdioTransport-Err" };
+            _errReadThread.Start();
             _dispatcher.Enqueue(() => OnConnect?.Invoke(ClientId));
         }
 
@@ -109,6 +115,28 @@ namespace LLiquidLink
             {
                 _running = false;
                 _dispatcher.Enqueue(() => OnDisconnect?.Invoke(ClientId));
+            }
+        }
+
+        void ErrorReadLoop()
+        {
+            try
+            {
+                string text;
+                using (var reader = new StreamReader(_err))
+                {
+                    text = reader.ReadToEnd();
+                }
+
+                if (!string.IsNullOrEmpty(text))
+                {
+                    _getLogger().Info("StdioTransport stderr: " + text);
+                    _onError?.Invoke(new Exception(text));
+                }
+            }
+            catch (Exception ex)
+            {
+                _getLogger().Info("StdioTransport stderr read error: " + ex.Message);
             }
         }
 

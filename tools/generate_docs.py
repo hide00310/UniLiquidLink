@@ -23,8 +23,8 @@ from collections import OrderedDict
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# tools/ -> WebSocketLib/ -> Editor/ -> Assets/ -> <project root>
-PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
+# tools/ -> UniLiquidLink/ -> WebSocketLib/ -> Editor/ -> Assets/ -> <project root>
+PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "..", "..", ".."))
 WEBSOCKETLIB = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 
 CSPROJ = os.path.join(PROJECT_ROOT, "UniLiquidLink.csproj")
