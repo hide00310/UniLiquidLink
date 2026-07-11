@@ -1,0 +1,18 @@
+{
+    "name": "UniLiquidLink.Samples.AllFeaturesTour",
+    "rootNamespace": "",
+    "references": [
+        "UniLiquidLink"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

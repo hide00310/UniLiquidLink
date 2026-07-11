@@ -24,7 +24,7 @@ from collections import OrderedDict
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WEBSOCKETLIB = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 
-PYTHON_DIR = os.path.join(WEBSOCKETLIB, "Python")
+PYTHON_DIR = os.path.join(WEBSOCKETLIB, "Python~")
 
 PACKAGES = [
     ("lliquidlink.core",   os.path.join(PYTHON_DIR, "lliquidlink", "core")),

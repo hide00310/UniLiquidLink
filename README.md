@@ -52,12 +52,16 @@ flowchart LR
 
 ## Installation
 
-At this time, neither a Unity Package Manager (UPM) `package.json` nor a Python pip package is distributed. Please set things up manually using the steps below.
+A Python pip package is not distributed yet. Please set up the Python side manually using the steps below. The Unity side can be installed as a Unity Package Manager (UPM) git package.
 
 ### Unity (C#) side
 
-1. Copy the folder as-is into your project's `Assets/Editor/` directory (it is treated as an Editor-only assembly via `UnityExecutor.asmdef`).
-2. `UnityExecutor.asmdef` references the following precompiled DLL. If this is not present in your project, you will get a compile error.
+1. In Unity, open `Window > Package Manager > + > Add package from git URL...` and enter:
+   ```
+   https://github.com/hide00310/UniLiquidLink.git#v0.1.0
+   ```
+   (Replace the tag with the latest released version. It is treated as an Editor-only assembly via `UniLiquidLink.asmdef`.)
+2. `UniLiquidLink.asmdef` references the following precompiled DLL. If this is not present in your project, you will get a compile error.
    - `System.Text.Json.dll`
 
    Example ways to obtain it:
@@ -66,7 +70,7 @@ At this time, neither a Unity Package Manager (UPM) `package.json` nor a Python 
 
 ### Python side
 
-1. Since it is not distributed as a pip package, add the `Python/` directory to `PYTHONPATH` to use it.
+1. Since it is not distributed as a pip package, add the `Python~/` directory to `PYTHONPATH` to use it.
 
 2. Install the library required for execution.
 
@@ -82,15 +86,15 @@ At this time, neither a Unity Package Manager (UPM) `package.json` nor a Python 
 
 ## How to run
 
-You can verify it works using the minimal sample in `Samples/CubeDemo`.
+You can verify it works using the minimal sample `Cube Demo`. In `Window > Package Manager`, select the UniLiquidLink package, open the `Samples` tab, and click `Import` next to `Cube Demo`. It is copied into `Assets/Samples/UniLiquidLink/<version>/CubeDemo/`.
 
 1. Run `UniLiquidLink/Samples/Cube Demo Server Window` from the Unity menu,
 and configure the command to start the Python middleware.
-Example: `python Samples/CubeDemo/run_middleware_server.py`
+Example: `python Assets/Samples/UniLiquidLink/<version>/CubeDemo/run_middleware_server.py`
 Start the server on the C# side (it listens on `http://localhost:8700` by default).
 
    ```csharp
-   // Samples/CubeDemo/CubeDemoServer.cs (excerpt)
+   // CubeDemoServer.cs (excerpt)
    server = new Server();
    server.RegisterCallerAssembly();
 
@@ -104,11 +108,11 @@ Start the server on the C# side (it listens on `http://localhost:8700` by defaul
 2. Run the sample script on the Python side.
 
    ```bash
-   python Samples/CubeDemo/create_and_rotate_cube.py
+   python Assets/Samples/UniLiquidLink/<version>/CubeDemo/create_and_rotate_cube.py
    ```
 
   ```python
-  # Samples/CubeDemo/create_and_rotate_cube.py (excerpt)
+  # create_and_rotate_cube.py (excerpt)
   from lliquidlink.client import Client, TcpJsonRpcTransport
   from lliquidlink.client.models import type_, enum
 

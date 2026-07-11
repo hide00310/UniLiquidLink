@@ -2,7 +2,7 @@
 Source-of-truth schema definitions for the RPC wire protocol.
 
 Edit this file to add or modify schema types, then run generate_schema.py
-to regenerate Python/lliquidlink/client/_schema.py and CSharp/LLiquidLink/Models/Schema.cs.
+to regenerate Python~/lliquidlink/client/_schema.py and CSharp/LLiquidLink/Models/Schema.cs.
 """
 
 from typing import List, Literal
@@ -53,7 +53,7 @@ class RpcEnum(BaseModel):
 # which Quicktype cannot represent (would produce duplicate attributes field).
 CS_MODELS = [RpcType, RpcChainStep, RpcUnityObject, RpcEnum]
 
-# Models to generate into Python/lliquidlink/client/_schema.py directly (not via Quicktype).
+# Models to generate into Python~/lliquidlink/client/_schema.py directly (not via Quicktype).
 PY_MODELS = [RpcType, RpcChainStep, ReleaseRequest, RpcEnum]
 
 # Override C# field types after Quicktype generation.

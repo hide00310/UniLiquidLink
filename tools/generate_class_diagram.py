@@ -26,9 +26,9 @@ OUT_FILE = os.path.join(WEBSOCKETLIB, "Docs", "ClassDiagram.md")
 HTML_FILE = os.path.join(WEBSOCKETLIB, "Docs", "ClassDiagram.html")
 
 PACKAGES = [
-    os.path.join("Python", "lliquidlink", "core"),
-    os.path.join("Python", "lliquidlink", "client"),
-    os.path.join("Python", "lliquidlink", "server"),
+    os.path.join("Python~", "lliquidlink", "core"),
+    os.path.join("Python~", "lliquidlink", "client"),
+    os.path.join("Python~", "lliquidlink", "server"),
 ]
 
 _REL_RE = re.compile(

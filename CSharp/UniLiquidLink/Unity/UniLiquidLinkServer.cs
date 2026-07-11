@@ -143,7 +143,8 @@ namespace UniLiquidLink
             return Path.GetFullPath(Path.Combine(csharpUnityDir, "..", "..", ".."));
         }
 
-        // Resolve the "Python" package directory next to this source file (/Python).
+        // Resolve the "Python~" package directory next to this source file (/Python~).
+        // The trailing "~" excludes it from Unity's AssetDatabase import/Project view.
         // Exposed via PYTHONPATH (not as the process's working directory) so that
         // `python -m lliquidlink.server` can import the lliquidlink package without a global pip
         // install, while the working directory stays at WebSocketLib root so the middleware's
@@ -151,7 +152,7 @@ namespace UniLiquidLink
         private static string GetPythonDirectory([CallerFilePath] string path = null)
         {
             string dir = GetRootLibDirectory(path);
-            return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, "Python");
+            return string.IsNullOrEmpty(dir) ? null : Path.Combine(dir, "Python~");
         }
 
         Process StartPythonMiddleware(string pythonServerStartCommand)

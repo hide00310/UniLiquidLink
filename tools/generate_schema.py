@@ -42,7 +42,7 @@ WEBSOCKETLIB = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
 MODELS_DIR = os.path.join(WEBSOCKETLIB, "CSharp", "LLiquidLink", "Models")
 
 CS_OUT = os.path.join(MODELS_DIR, "Schema.cs")
-PY_OUT = os.path.join(WEBSOCKETLIB, "Python", "lliquidlink", "client", "_schema.py")
+PY_OUT = os.path.join(WEBSOCKETLIB, "Python~", "lliquidlink", "client", "_schema.py")
 
 # Files replaced by Schema.cs and removed on generation.
 OBSOLETE_CS_FILES = [

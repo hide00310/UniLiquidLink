@@ -124,8 +124,6 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
-*.meta
-
 # Python
 __pycache__/
 /dist/
@@ -133,3 +131,7 @@ __pycache__/
 
 *.csv
 *.html
+__pycache__.meta
+
+# Stray debug log dumps from manual test runs
+Tests/CSharpUtils/*.txt
