@@ -130,23 +130,15 @@ def update_manifest(target_dir):
 
 
 def reset_package_cache(target_dir):
-    """Drop any cached resolution of our package so Unity re-resolves the latest push."""
-    lock_path = target_dir / "Packages" / "packages-lock.json"
-    if lock_path.exists():
-        with open(lock_path, encoding="utf-8") as f:
-            data = json.load(f)
-        if PACKAGE_NAME in data.get("dependencies", {}):
-            del data["dependencies"][PACKAGE_NAME]
-            with open(lock_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-                f.write("\n")
-            log(f"Removed stale {PACKAGE_NAME} entry from packages-lock.json")
-
-    cache_dir = target_dir / "Library" / "PackageCache"
-    if cache_dir.exists():
-        for entry in cache_dir.glob(f"{PACKAGE_NAME}@*"):
-            shutil.rmtree(entry, ignore_errors=True)
-            log(f"Removed cached package dir {entry}")
+    """Wipe the target project's Library cache (regenerable) so Unity re-resolves the
+    latest push and re-imports/recompiles from scratch. Surgically removing just the
+    packages-lock.json entry and PackageCache dir was tried first but left stale Bee
+    incremental-build (.rsp) artifacts referencing the deleted path, causing spurious
+    CS2001 "source file not found" errors -- a full wipe is slower but reliable."""
+    library_dir = target_dir / "Library"
+    if library_dir.exists():
+        shutil.rmtree(library_dir, ignore_errors=True)
+        log(f"Removed {library_dir} to force a clean re-import")
 
 
 # ─── conda / pip ─────────────────────────────────────────────────────────────
