@@ -6,4 +6,4 @@ Subpackages:
     lliquidlink.server - Server middleware bridging external clients to Unity over stdio.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
