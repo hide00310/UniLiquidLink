@@ -52,13 +52,11 @@ flowchart LR
 
 ## Installation
 
-A Python pip package is not distributed yet. Please set up the Python side manually using the steps below. The Unity side can be installed as a Unity Package Manager (UPM) git package.
-
 ### Unity (C#) side
 
 1. In Unity, open `Window > Package Manager > + > Add package from git URL...` and enter:
    ```
-   https://github.com/hide00310/UniLiquidLink.git#v0.1.0
+   https://github.com/hide00310/UniLiquidLink.git
    ```
    (Replace the tag with the latest released version. It is treated as an Editor-only assembly via `UniLiquidLink.asmdef`.)
 2. `UniLiquidLink.asmdef` references the following precompiled DLL. If this is not present in your project, you will get a compile error.
@@ -69,20 +67,9 @@ A Python pip package is not distributed yet. Please set up the Python side manua
    - Since these are only needed in the Editor, it is recommended to set the target platform to Editor only in the Plugins Inspector
 
 ### Python side
-
-1. Since it is not distributed as a pip package, add the `Python~/` directory to `PYTHONPATH` to use it.
-
-2. Install the library required for execution.
-
-   ```bash
-   pip install anyio
-   ```
-
-3. Only if you want to run the tests, the following are additionally required (for development purposes).
-
-   ```bash
-   pip install pytest pytest-asyncio
-   ```
+```bash
+pip install lliquidlink
+```
 
 ## How to run
 
@@ -91,47 +78,49 @@ You can verify it works using the `UniLiquidLink Samples` sample, which bundles 
 1. Run `UniLiquidLink/Samples/Sample Window` from the Unity menu, pick `Cube Demo`, and press `Start` — no command needs to be entered: the Python command defaults to `python` and the middleware script path is resolved automatically.
 Start the server on the C# side (it listens on `http://localhost:8700` by default).
 
-   ```csharp
-   // CubeDemoServer.cs (excerpt)
-   server = new Server();
-   server.RegisterCallerAssembly();
+```csharp
+// CubeDemoServer.cs (excerpt)
+server = new Server();
+server.RegisterCallerAssembly();
 
-   // Create a primitive: client.GameObject.CreatePrimitive(enum("Cube"))
-   server.Rpc.AddRpcMethod((Func<PrimitiveType, GameObject>)GameObject.CreatePrimitive);
+// Create a primitive: client.GameObject.CreatePrimitive(enum("Cube"))
+server.Rpc.AddRpcMethod((Func<PrimitiveType, GameObject>)GameObject.CreatePrimitive);
 
-   // Property chain: cube.transform.Rotate(...) or cube.transform.position = ...
-   server.Rpc.AddRpcGetProperty((GameObject obj) => obj.transform);
-   ```
+// Property chain: cube.transform.Rotate(...) or cube.transform.position = ...
+server.Rpc.AddRpcGetProperty((GameObject obj) => obj.transform);
+```
 
 2. Run the sample script on the Python side.
 
-   ```bash
-   python Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/CubeDemo/create_and_rotate_cube.py
-   ```
+```bash
+python Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/CubeDemo/create_and_rotate_cube.py
+```
 
-  ```python
-  # create_and_rotate_cube.py (excerpt)
-  from lliquidlink.client import Client, TcpJsonRpcTransport
-  from lliquidlink.client.models import type_, enum
+```python
+# create_and_rotate_cube.py (excerpt)
+from lliquidlink.client import Client, TcpJsonRpcTransport
+from lliquidlink.client.models import type_, enum
 
-  def on_execute(client):
-      cube = client.GameObject.CreatePrimitive(enum("Cube"))
-      renderer = cube.GetComponent(type_("Renderer"))
-      renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
-      cube.transform.Rotate(30, 45, 0)
+def on_execute(client):
+    cube = client.GameObject.CreatePrimitive(enum("Cube"))
+    renderer = cube.GetComponent(type_("Renderer"))
+    renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
+    cube.transform.Rotate(30, 45, 0)
 
-  client = Client(TcpJsonRpcTransport("localhost", 8700))
-  client.on_execute += on_execute
-  client.mainloop()
-  ```
+client = Client(TcpJsonRpcTransport("localhost", 8700))
+client.on_execute += on_execute
+client.mainloop()
+```
 
-   When run, a red Cube is created in the Unity scene and rotates.
+When run, a red Cube is created in the Unity scene and rotates.
 
 ## Supported features
 
 - **RPC method registration (C# side)**
-  - Register static/instance methods individually or in bulk
-  - Register property getters/setters individually or in bulk
+  - Register static/instance methods individually
+  - Register property getters/setters individually
+- **Bulk RPC method registration (C# side)**
+  - Register all public methods/properties of a class at once
 - **Passing instance objects**
   Instance objects such as Unity's GameObject can be passed back and forth on the Python side
 - **Type/Enum resolution**
@@ -147,6 +136,14 @@ Start the server on the C# side (it listens on `http://localhost:8700` by defaul
 - The only real protective boundary is that it binds to `localhost` only by default. If you configure it to be exposed to a LAN or the internet, add a reverse proxy, VPN, or token authentication/TLS termination via a transport-layer subclass, etc.
 - The whitelist approach — where only RPCs explicitly registered on the C# side can be executed — is the only execution control in place, but note that if you bulk-register an entire class with `AddRpcAllMethod`, a wider API surface than intended may become externally callable.
 - Arbitrary registered C# code executes with the same privileges as the Unity Editor process, so do not start this server on an untrusted network.
+
+## Development
+
+The following are additionally required only if you want to run the tests.
+
+```bash
+pip install pytest pytest-asyncio
+```
 
 ## Verified tool versions
 
