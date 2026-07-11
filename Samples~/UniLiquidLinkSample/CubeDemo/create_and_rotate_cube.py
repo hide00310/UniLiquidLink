@@ -2,7 +2,7 @@
 Cube Demo — create a red cube and rotate it once.
 
 Prerequisites:
-  1. In Unity, run menu: UniLiquidLink/Samples/Cube Demo Server Start
+  1. In Unity, open menu: UniLiquidLink/Samples/Sample Window, select "Cube Demo", then press Start
   2. Run this script:
 """
 import sys

@@ -132,6 +132,7 @@ class JsonRpcPeer:
         error = msg.get("error")
         if error is not None:
             message = error.get("message", "RPC error") if isinstance(error, dict) else str(error)
+            logger.error("received error response: %s", message)
             slot.error = RpcError(message)
         else:
             slot.result = msg.get("result")
