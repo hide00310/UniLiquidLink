@@ -5,8 +5,6 @@ namespace UniLiquidLink.Samples
 {
     public class CubeDemoServer
     {
-        internal const string PrefsKeyCommand = "UniLiquidLink.CubeDemoServer.PythonServerStartCommand";
-
         static CubeDemoServer _inner;
         readonly Server server;
 

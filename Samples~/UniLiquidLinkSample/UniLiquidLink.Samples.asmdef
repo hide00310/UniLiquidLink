@@ -1,5 +1,5 @@
 {
-    "name": "UniLiquidLink.Samples.AllFeaturesTour",
+    "name": "UniLiquidLink.Samples",
     "rootNamespace": "",
     "references": [
         "UniLiquidLink"

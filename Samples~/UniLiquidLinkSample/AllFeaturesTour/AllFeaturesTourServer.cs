@@ -11,8 +11,6 @@ namespace UniLiquidLink.Samples
         const string DemoObjectName = "AllFeaturesTourObject";
         const string DemoAssetPath = "Assets/AllFeaturesTourSample.mat";
 
-        internal const string PrefsKeyCommand = "UniLiquidLink.AllFeaturesTourServer.PythonServerStartCommand";
-
         static AllFeaturesTourServer _inner;
         readonly Server server;
 

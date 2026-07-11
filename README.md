@@ -86,11 +86,9 @@ A Python pip package is not distributed yet. Please set up the Python side manua
 
 ## How to run
 
-You can verify it works using the minimal sample `Cube Demo`. In `Window > Package Manager`, select the UniLiquidLink package, open the `Samples` tab, and click `Import` next to `Cube Demo`. It is copied into `Assets/Samples/UniLiquidLink/<version>/CubeDemo/`.
+You can verify it works using the `UniLiquidLink Samples` sample, which bundles `Cube Demo` and `All Features Tour` in a single window. In `Window > Package Manager`, select the UniLiquidLink package, open the `Samples` tab, and click `Import` next to `UniLiquidLink Samples`. It is copied into `Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/`.
 
-1. Run `UniLiquidLink/Samples/Cube Demo Server Window` from the Unity menu,
-and configure the command to start the Python middleware.
-Example: `python Assets/Samples/UniLiquidLink/<version>/CubeDemo/run_middleware_server.py`
+1. Run `UniLiquidLink/Samples/Sample Window` from the Unity menu, pick `Cube Demo`, and press `Start` — no command needs to be entered: the Python command defaults to `python` and the middleware script path is resolved automatically.
 Start the server on the C# side (it listens on `http://localhost:8700` by default).
 
    ```csharp
@@ -108,7 +106,7 @@ Start the server on the C# side (it listens on `http://localhost:8700` by defaul
 2. Run the sample script on the Python side.
 
    ```bash
-   python Assets/Samples/UniLiquidLink/<version>/CubeDemo/create_and_rotate_cube.py
+   python Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/CubeDemo/create_and_rotate_cube.py
    ```
 
   ```python
