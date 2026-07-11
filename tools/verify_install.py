@@ -27,6 +27,14 @@ PACKAGE_GIT_URL = "https://github.com/hide00310/UniLiquidLink.git#develop"
 INTEGRATION_PORT = 8700
 DEFAULT_TARGET_DIR = "../../../../../../../LLiquidLinkForTest/LLiquidLink"
 
+# UniLiquidLink.Tests.asmdef (which hosts BatchModeIntegrationTest) is guarded by
+# defineConstraints: ["UNITY_INCLUDE_TESTS"]. That symbol is only defined when
+# com.unity.test-framework is a *direct* manifest dependency -- a project that only
+# pulls it in transitively (e.g. via com.unity.feature.development) silently excludes
+# the Tests assembly, and -executeMethod then fails with "class could not be found".
+TEST_FRAMEWORK_PACKAGE = "com.unity.test-framework"
+TEST_FRAMEWORK_VERSION = "1.1.33"
+
 
 def log(msg):
     print(f"[verify_install] {msg}", flush=True)
@@ -111,11 +119,14 @@ def update_manifest(target_dir):
     manifest_path = target_dir / "Packages" / "manifest.json"
     with open(manifest_path, encoding="utf-8") as f:
         data = json.load(f)
-    data.setdefault("dependencies", {})[PACKAGE_NAME] = PACKAGE_GIT_URL
+    deps = data.setdefault("dependencies", {})
+    deps[PACKAGE_NAME] = PACKAGE_GIT_URL
+    deps.setdefault(TEST_FRAMEWORK_PACKAGE, TEST_FRAMEWORK_VERSION)
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-    log(f"Updated {manifest_path} with {PACKAGE_NAME} -> {PACKAGE_GIT_URL}")
+    log(f"Updated {manifest_path} with {PACKAGE_NAME} -> {PACKAGE_GIT_URL} "
+        f"(and ensured {TEST_FRAMEWORK_PACKAGE} is a direct dependency)")
 
 
 def reset_package_cache(target_dir):
