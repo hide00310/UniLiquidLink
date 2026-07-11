@@ -5,7 +5,7 @@ module_dir = os.path.abspath(os.path.dirname(__file__))
 
 logger = logging.getLogger(__name__)
 def setup_logger():
-    level = logging.DEBUG
+    level = logging.INFO
     log_path = f"{module_dir}/log.log"
     try:
         os.remove(log_path)

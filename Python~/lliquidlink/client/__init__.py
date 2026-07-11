@@ -12,10 +12,10 @@ Usage::
 """
 import logging
 
-logger = logging.getLogger("lliquidlink.client")
+logger = logging.getLogger(__name__)
 
 def setup_logger():
-    level = logging.DEBUG
+    level = logging.INFO
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("[Client] %(message)s"))
     h.setLevel(level)
