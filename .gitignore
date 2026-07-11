@@ -132,3 +132,6 @@ __pycache__/
 *.csv
 *.html
 __pycache__.meta
+
+# Stray debug log dumps from manual test runs
+Tests/CSharpUtils/*.txt
