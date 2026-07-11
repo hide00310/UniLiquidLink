@@ -122,11 +122,19 @@ def update_manifest(target_dir):
     deps = data.setdefault("dependencies", {})
     deps[PACKAGE_NAME] = PACKAGE_GIT_URL
     deps.setdefault(TEST_FRAMEWORK_PACKAGE, TEST_FRAMEWORK_VERSION)
+
+    # Unity only compiles a git/registry package's Tests/ folder (where
+    # BatchModeIntegrationTest lives) if the package is explicitly opted into
+    # via "testables" -- unlike local/embedded packages, this isn't automatic.
+    testables = data.setdefault("testables", [])
+    if PACKAGE_NAME not in testables:
+        testables.append(PACKAGE_NAME)
+
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
     log(f"Updated {manifest_path} with {PACKAGE_NAME} -> {PACKAGE_GIT_URL} "
-        f"(and ensured {TEST_FRAMEWORK_PACKAGE} is a direct dependency)")
+        f"(ensured {TEST_FRAMEWORK_PACKAGE} dependency and testables entry)")
 
 
 def reset_package_cache(target_dir):
