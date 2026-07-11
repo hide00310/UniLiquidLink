@@ -28,7 +28,6 @@ packages = ["Python/lliquidlink"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["Python"]
 testpaths = ["Tests/Python"]
 
 [tool.semantic_release]
