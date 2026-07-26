@@ -36,14 +36,6 @@ namespace LLiquidLink
     /// <summary>Shared helpers for reading/writing JSON primitives directly (no wrapper DTO).</summary>
     internal static class JsonPrimitiveHelper
     {
-        /// <summary>True for CLR primitive-ish types that should bypass the Unity-object registry envelope.</summary>
-        public static bool IsPrimitive(object value)
-        {
-            return value is string or bool
-                or int or long or short
-                or double or float or decimal;
-        }
-
         /// <summary>Read the current JSON token directly as a boxed CLR primitive.</summary>
         public static object ReadRaw(ref Utf8JsonReader reader)
         {

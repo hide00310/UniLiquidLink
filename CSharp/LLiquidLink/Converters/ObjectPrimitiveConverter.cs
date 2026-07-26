@@ -14,7 +14,11 @@ namespace LLiquidLink
 
         public override object Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            return reader.TokenType == JsonTokenType.Null ? null : JsonPrimitiveHelper.ReadRaw(ref reader);
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+            return JsonPrimitiveHelper.ReadRaw(ref reader);
         }
 
         public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)

@@ -20,7 +20,12 @@ namespace LLiquidLink
                 return null;
             }
             var rpcObj = JsonSerializer.Deserialize<RpcType>(ref reader, DtoOptions);
-            return rpcObj == null ? null : _resolver.Resolve(rpcObj.value);
+            if (rpcObj == null)
+            {
+                return null;
+            }
+
+            return _resolver.Resolve(rpcObj.value);
         }
 
         public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options)

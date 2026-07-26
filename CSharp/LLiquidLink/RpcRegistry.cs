@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,77 +11,157 @@ using ILogger = LLiquidLink.Logger.ILogger;
 
 namespace LLiquidLink
 {
-    /// <summary>Registers RPC methods, JSON converters, and property accessors on an <see cref="RpcBus"/>.</summary>
-    public class RpcRegistrar
+    /// <summary>Registers RPC methods, JSON converters, and property accessors, owning the registration table read by <see cref="RpcSearcher"/>.</summary>
+    public class RpcRegistry
     {
         readonly Func<ILogger> _getLogger;
-        readonly JsonSerializerChain _chain;
-        readonly Dictionary<string, Type> _rpcTypeToOrgType = new Dictionary<string, Type>();
-        readonly Dictionary<(Type ObjType, string PropertyName), (Type PropertyType, Delegate Method)> _rpcProperties
-            = new Dictionary<(Type, string), (Type, Delegate)>();
-        readonly Dictionary<(Type ObjType, string PropertyName), (Type PropertyType, Action<object, object> Setter)> _rpcSetProperties
-            = new Dictionary<(Type, string), (Type, Action<object, object>)>();
-        readonly RpcBus _bus;
-        readonly TypeResolver _typeResolver;
+        readonly RpcRegistrationTable _table = new RpcRegistrationTable();
 
-        /// <summary>Initialize the registrar and register the built-in <c>JsonRpc_ResolveChain</c> method.</summary>
-        /// <param name="bus">RPC bus to register methods on.</param>
-        /// <param name="chain">Pre/main/fallback JSON serializer stage chain.</param>
+        /// <summary>Read-only search interface over this registrar's registration table, used by <see cref="MethodCaller"/> for dispatch.</summary>
+        public RpcSearcher Searcher { get; }
+
+        /// <summary>
+        /// Additional attribute types (beyond <see cref="System.ComponentModel.DefaultValueAttribute"/>) that expose
+        /// a public <c>Value</c> property, checked via reflection when resolving omitted RPC parameter defaults.
+        /// Unity integrations (e.g. <c>UnityEngine.Internal.DefaultValueAttribute</c>) register their
+        /// attribute type here at startup so <see cref="MethodCaller"/> never references UnityEngine directly.
+        /// Only ever written once from a static constructor before any dispatch runs, so concurrent
+        /// writes are not a concern.
+        /// </summary>
+        public static readonly HashSet<Type> AdditionalDefaultValueAttributeTypes = new HashSet<Type>();
+
+        /// <summary>Names of all registered RPC handlers.</summary>
+        public IEnumerable<string> RegisteredRpcNames => _table.Router.Keys;
+
+        /// <summary>Initialize the registrar.</summary>
         /// <param name="getLogger">Factory that returns the current logger.</param>
         /// <param name="typeResolver">Resolver used to turn a root object's <c>orgType</c> name into its concrete <see cref="Type"/>.</param>
-        public RpcRegistrar(RpcBus bus, JsonSerializerChain chain, Func<ILogger> getLogger, TypeResolver typeResolver = null)
+        public RpcRegistry(Func<ILogger> getLogger, TypeResolver typeResolver = null)
         {
             _getLogger = getLogger;
-            _chain = chain;
-            _typeResolver = typeResolver;
-            _bus = bus;
-            _bus.Register("JsonRpc_ResolveChain",
-                (Func<JsonElement, RpcChainStep[], string, JsonElement, object>)JsonRpc_ResolveChain);
-            _bus.Register("JsonRpc_ResolveChainSet",
-                (Func<JsonElement, RpcChainStep[], string, JsonElement, object>)JsonRpc_ResolveChainSet);
+            Searcher = new RpcSearcher(_table, typeResolver);
+        }
+
+        /// <summary>
+        /// Register a delegate under <paramref name="rpcName"/>. Arguments are deserialized from JSON
+        /// using the delegate's parameter types.
+        /// </summary>
+        /// <param name="rpcName">RPC method name clients use to call this handler.</param>
+        /// <param name="method">Delegate to invoke.</param>
+        public void Register(string rpcName, Delegate method)
+        {
+            string logName = (method.Method.DeclaringType != null ? method.Method.DeclaringType.FullName : "") + "." + method.Method.Name;
+            var candidate = new RpcSearcher.MethodCandidate
+            {
+                IsStatic = true,
+                InstanceType = null,
+                MethodParams = method.Method.GetParameters(),
+                Method = args => method.DynamicInvoke(args),
+                FullName = logName,
+            };
+            RegisterMethodOverloads(rpcName, new List<RpcSearcher.MethodCandidate> { candidate });
+        }
+
+        /// <summary>
+        /// Register a method for direct instance dispatch. The first JSON argument is deserialized as the
+        /// instance; remaining arguments are matched to <paramref name="methodParams"/>.
+        /// </summary>
+        /// <param name="rpcName">RPC method name clients use to call this handler.</param>
+        /// <param name="instanceType">Expected type of the first (instance) argument.</param>
+        /// <param name="methodName">Method name used as a key for chain resolution.</param>
+        /// <param name="methodParams">Parameter descriptors for the method (excluding the instance).</param>
+        /// <param name="body">Invocation body that receives <c>[instance, arg0, ...]</c>.</param>
+        /// <param name="logName">Fully qualified name used for debug logging.</param>
+        public void RegisterDirect(string rpcName, Type instanceType, string methodName, ParameterInfo[] methodParams, Func<object[], object> body, string logName)
+        {
+            var candidate = new RpcSearcher.MethodCandidate
+            {
+                IsStatic = false,
+                InstanceType = instanceType,
+                MethodParams = methodParams,
+                Method = body,
+                FullName = logName,
+            };
+            RegisterDirectMethodOverloads(rpcName, methodName, new List<RpcSearcher.MethodCandidate> { candidate });
+        }
+
+        /// <summary>
+        /// Register one or more overload candidates under <paramref name="rpcName"/>. On dispatch (via
+        /// <see cref="MethodCaller.Call"/>), each candidate is tried in order and the first whose arguments
+        /// deserialize successfully is invoked.
+        /// </summary>
+        /// <param name="rpcName">RPC method name clients use to call this handler.</param>
+        /// <param name="candidates">Overload candidates, tried in order.</param>
+        public void RegisterMethodOverloads(string rpcName, IList<RpcSearcher.MethodCandidate> candidates)
+        {
+            _getLogger().DebugFormat("Register: {0} ({1} overloads)", rpcName, candidates.Count);
+            _table.Router[rpcName] = candidates;
+        }
+
+        /// <summary>
+        /// Register direct-dispatch overload candidates. Like <see cref="RegisterMethodOverloads"/>, but instance
+        /// candidates are also indexed by <paramref name="methodName"/> so they can be reached via chain resolution.
+        /// </summary>
+        /// <param name="rpcName">RPC method name clients use to call this handler (typically prefixed with <c>"_"</c>).</param>
+        /// <param name="methodName">Method name used as the chain-resolution key.</param>
+        /// <param name="candidates">Overload candidates, tried in order.</param>
+        public void RegisterDirectMethodOverloads(string rpcName, string methodName, IList<RpcSearcher.MethodCandidate> candidates)
+        {
+            _getLogger().DebugFormat("RegisterDirect: {0} -> {1} ({2} overloads)", rpcName, methodName, candidates.Count);
+
+            foreach (RpcSearcher.MethodCandidate c in candidates)
+            {
+                if (c.IsStatic)
+                {
+                    continue;
+                }
+                var key = (c.InstanceType, methodName);
+                if (!_table.DirectEntries.TryGetValue(key, out List<RpcSearcher.MethodCandidate> list))
+                {
+                    list = new List<RpcSearcher.MethodCandidate>();
+                    _table.DirectEntries[key] = list;
+                }
+                list.Add(c);
+            }
+
+            _table.Router[rpcName] = candidates;
         }
 
         /// <summary>
         /// Register a JSON converter that maps between an RPC wire type and its original .NET type.
-        /// The converter is added to the shared <see cref="JsonSerializerOptions"/> and the RPC type map.
+        /// The converter is added to <paramref name="options"/> and the RPC type map.
         /// </summary>
         /// <typeparam name="TOrg">Original .NET type.</typeparam>
         /// <typeparam name="TRpc">RPC wire DTO type.</typeparam>
+        /// <param name="options">Main-stage JSON serializer options to add the converter to.</param>
         /// <param name="converter">Converter instance to register.</param>
-        public void AddRpcConverter<TOrg, TRpc>(RpcJsonConverter<TOrg, TRpc> converter)
+        public void AddConverterAndRegister<TOrg, TRpc>(JsonSerializerOptions options, RpcJsonConverter<TOrg, TRpc> converter)
             where TOrg : class
             where TRpc : class
         {
-            _chain.Main.Converters.Add(converter);
-            _rpcTypeToOrgType[converter.rpcTypeName] = converter.orgType;
+            options.Converters.Add(converter);
+            _table.RpcTypeToOrgType[converter.rpcTypeName] = converter.orgType;
         }
 
         /// <summary>Register a converter factory on the fallback JSON options, tried when the primary serializer fails.</summary>
-        /// <param name="factory">Converter factory to add.</param>
-        public void AddFallbackConverterFactory(JsonConverterFactory factory)
+        /// <param name="options">Fallback-stage JSON serializer options to add the factory to.</param>
+        /// <param name="converter">Converter factory to add.</param>
+        public void AddConverter(JsonSerializerOptions options, JsonConverter converter)
         {
-            _chain.Fallback.Converters.Add(factory);
-        }
-
-        public void AddPreConverter<TOrg, TRpc>(RpcJsonConverter<TOrg, TRpc> converter)
-            where TOrg : class
-            where TRpc : class
-        {
-            _chain.Pre.Converters.Add(converter);
+            options.Converters.Add(converter);
         }
 
         /// <summary>
-        /// Register a delegate as an RPC method. The RPC name is derived from the delegate's declaring type
-        /// and method name unless <paramref name="options"/>.SimpleCall is <c>true</c>.
+        /// Register a delegate as an RPC method. The RPC name is always derived from the delegate's
+        /// declaring type and method name.
         /// </summary>
         /// <typeparam name="TDelegate">Delegate type.</typeparam>
         /// <param name="handler">Delegate to register.</param>
-        /// <param name="options">Registration options. If <c>null</c>, uses defaults.</param>
+        /// <param name="options">Accepted for API symmetry with the other AddRpc* overloads; unused here since a single delegate has no inherited/nested members to filter.</param>
         public void AddRpcMethod<TDelegate>(TDelegate handler, RpcOptions options = null) where TDelegate : Delegate
         {
-            options ??= new RpcOptions();
             string rpcName = handler.Method.DeclaringType?.FullName + "." + handler.Method.Name;
-            _bus.Register(rpcName, handler);
+            Register(rpcName, handler);
         }
 
         /// <summary>Register a property getter so it can be accessed via chain resolution.</summary>
@@ -94,7 +174,7 @@ namespace LLiquidLink
             string propertyName = memberExpr.Member.Name;
             Type objType = typeof(TObj);
             Type propertyType = typeof(TResult);
-            _rpcProperties.Add((objType, propertyName), (propertyType, expr.Compile()));
+            _table.RpcProperties[(objType, propertyName)] = (propertyType, expr.Compile());
             _getLogger().DebugFormat("AddRpcGetProperty: {0}, {1}, {2}", objType, propertyType, propertyName);
         }
 
@@ -108,7 +188,7 @@ namespace LLiquidLink
         public void AddRpcRootGetProperty<TResult>(string name, Func<TResult> getter)
         {
             Func<object, TResult> wrapper = _ => getter();
-            _rpcProperties[(null, name)] = (typeof(TResult), wrapper);
+            _table.RpcProperties[(null, name)] = (typeof(TResult), wrapper);
             _getLogger().DebugFormat("AddRpcRootGetProperty: {0}", name);
         }
 
@@ -135,7 +215,7 @@ namespace LLiquidLink
                 FieldInfo fieldInfo = (FieldInfo)member;
                 setter = (instance, value) => fieldInfo.SetValue(instance, value);
             }
-            _rpcSetProperties.Add((objType, propertyName), (propertyType, setter));
+            _table.RpcSetProperties[(objType, propertyName)] = (propertyType, setter);
             _getLogger().DebugFormat("AddRpcSetProperty: {0}, {1}, {2}", objType, propertyType, propertyName);
         }
 
@@ -151,7 +231,7 @@ namespace LLiquidLink
             var method = call.Method;
             string rpcName = "_" + method.DeclaringType?.FullName + "." + method.Name;
             string logName = (method.DeclaringType != null ? method.DeclaringType.FullName : "") + "." + method.Name;
-            _bus.RegisterDirect(
+            RegisterDirect(
                 rpcName,
                 handler.Parameters[0].Type,
                 method.Name,
@@ -179,7 +259,7 @@ namespace LLiquidLink
                 {
                     string name = t.FullName.Replace('+', '.') + "." + group.Key;
                     var candidates = group.Select(m => MakeCandidate(t, m)).ToList();
-                    _bus.RegisterMethodOverloads(name, candidates);
+                    RegisterMethodOverloads(name, candidates);
                 }
             }
         }
@@ -199,7 +279,7 @@ namespace LLiquidLink
                 {
                     string name = "_" + t.FullName.Replace('+', '.') + "." + group.Key;
                     var candidates = group.Select(m => MakeCandidate(t, m)).ToList();
-                    _bus.RegisterDirectMethodOverloads(name, group.Key, candidates);
+                    RegisterDirectMethodOverloads(name, group.Key, candidates);
                 }
             }
         }
@@ -225,14 +305,14 @@ namespace LLiquidLink
                     PropertyInfo prop = p;
                     bool isStatic = prop.GetGetMethod(true).IsStatic;
                     Func<object, object> getter = instance => prop.GetValue(isStatic ? null : instance);
-                    _rpcProperties[(t, p.Name)] = (p.PropertyType, getter);
+                    _table.RpcProperties[(t, p.Name)] = (p.PropertyType, getter);
                     _getLogger().DebugFormat("AddRpcAllGetProperty: {0}.{1}", t, p.Name);
                 }
                 foreach (FieldInfo f in t.GetFields(MemberFlags(options.IncludeInherited)))
                 {
                     FieldInfo field = f;
                     Func<object, object> getter = instance => field.GetValue(field.IsStatic ? null : instance);
-                    _rpcProperties[(t, f.Name)] = (f.FieldType, getter);
+                    _table.RpcProperties[(t, f.Name)] = (f.FieldType, getter);
                     _getLogger().DebugFormat("AddRpcAllGetProperty: {0}.{1}", t, f.Name);
                 }
             }
@@ -263,7 +343,7 @@ namespace LLiquidLink
                         prop.SetValue(isStatic ? null : instance, value);
                     }
 
-                    _rpcSetProperties[(t, p.Name)] = (p.PropertyType, setter);
+                    _table.RpcSetProperties[(t, p.Name)] = (p.PropertyType, setter);
                     _getLogger().DebugFormat("AddRpcAllSetProperty: {0}.{1}", t, p.Name);
                 }
                 foreach (FieldInfo f in t.GetFields(MemberFlags(options.IncludeInherited)))
@@ -278,7 +358,7 @@ namespace LLiquidLink
                         field.SetValue(field.IsStatic ? null : instance, value);
                     }
 
-                    _rpcSetProperties[(t, f.Name)] = (f.FieldType, setter);
+                    _table.RpcSetProperties[(t, f.Name)] = (f.FieldType, setter);
                     _getLogger().DebugFormat("AddRpcAllSetProperty: {0}.{1}", t, f.Name);
                 }
             }
@@ -345,117 +425,28 @@ namespace LLiquidLink
         /// <summary>Build an overload candidate that invokes <paramref name="m"/> declared on <paramref name="type"/>.</summary>
         /// <param name="type">Owning type used as the instance type for non-static methods.</param>
         /// <param name="m">Method to wrap.</param>
-        /// <returns>A candidate consumable by <see cref="RpcBus.RegisterMethodOverloads"/>.</returns>
-        static RpcBus.MethodCandidate MakeCandidate(Type type, MethodInfo m)
+        /// <returns>A candidate consumable by <see cref="RegisterMethodOverloads"/>.</returns>
+        static RpcSearcher.MethodCandidate MakeCandidate(Type type, MethodInfo m)
         {
             string fullName = type.FullName + "." + m.Name;
             ParameterInfo[] methodParams = m.GetParameters();
             return m.IsStatic
-                ? new RpcBus.MethodCandidate
+                ? new RpcSearcher.MethodCandidate
                 {
                     IsStatic = true,
                     InstanceType = null,
                     MethodParams = methodParams,
-                    Body = a => m.Invoke(null, a),
+                    Method = a => m.Invoke(null, a),
                     FullName = fullName,
                 }
-                : new RpcBus.MethodCandidate
+                : new RpcSearcher.MethodCandidate
                 {
                     IsStatic = false,
                     InstanceType = type,
                     MethodParams = methodParams,
-                    Body = a => m.Invoke(a[0], a.Skip(1).ToArray()),
+                    Method = a => m.Invoke(a[0], a.Skip(1).ToArray()),
                     FullName = fullName,
                 };
-        }
-
-        /// <summary>
-        /// Resolve a chain of property accesses and a terminal method call on a Unity object,
-        /// dispatching each step server-side. Called via the registered <c>JsonRpc_ResolveChain</c> RPC method.
-        /// </summary>
-        /// <param name="obj">JSON element describing the root Unity object (must contain <c>rpcType</c>).</param>
-        /// <param name="steps">Intermediate property access steps.</param>
-        /// <param name="method">Terminal method or property name to invoke.</param>
-        /// <param name="args">JSON array of arguments for the terminal method.</param>
-        /// <returns>The result of the terminal method call.</returns>
-        public object JsonRpc_ResolveChain(JsonElement obj, RpcChainStep[] steps, string method, JsonElement args)
-        {
-            _getLogger().DebugFormat("JsonRpc_ResolveChain({0}, {1}, {2}, {3})", obj, steps, method, args);
-            object current = obj.ValueKind == JsonValueKind.Null ? null : DeserializeRoot(obj);
-
-            foreach (var step in steps)
-            {
-                current = ResolveStep(current, step.name, Array.Empty<JsonElement>());
-            }
-
-            JsonElement[] restArgs = args.ValueKind == JsonValueKind.Array
-                ? args.EnumerateArray().ToArray()
-                : Array.Empty<JsonElement>();
-            return ResolveStep(current, method, restArgs);
-        }
-
-        /// <summary>
-        /// Resolve a chain of property accesses on a Unity object and assign a value to the terminal property.
-        /// Called via the registered <c>JsonRpc_ResolveChainSet</c> RPC method.
-        /// </summary>
-        /// <param name="obj">JSON element describing the root Unity object (must contain <c>rpcType</c>).</param>
-        /// <param name="steps">Intermediate property access steps leading to the owner object.</param>
-        /// <param name="property">Name of the property to set on the resolved owner object.</param>
-        /// <param name="value">JSON value to deserialize and assign to the property.</param>
-        /// <returns>Always <c>null</c>; assignment has no return value.</returns>
-        public object JsonRpc_ResolveChainSet(JsonElement obj, RpcChainStep[] steps, string property, JsonElement value)
-        {
-            object current = obj.ValueKind == JsonValueKind.Null ? null : DeserializeRoot(obj);
-
-            foreach (var step in steps)
-            {
-                current = ResolveStep(current, step.name, Array.Empty<JsonElement>());
-            }
-
-            for (Type t = current.GetType(); t != null; t = t.BaseType)
-            {
-                if (_rpcSetProperties.TryGetValue((t, property), out var setProperty))
-                {
-                    _getLogger().DebugFormat("SetProperty {0}.{1}", current, property);
-                    object deserialized = DeserializeWithFallback(value.GetRawText(), setProperty.PropertyType);
-                    setProperty.Setter(current, deserialized);
-                    return null;
-                }
-            }
-            throw new ArgumentException($"No set property '{property}' registered on {current.GetType()}");
-        }
-
-        /// <summary>
-        /// Deserialize the root Unity object descriptor into a live instance using its <c>rpcType</c>.
-        /// When the descriptor also carries an <c>orgType</c> (the concrete .NET type name), that type is
-        /// resolved and used instead of the coarse type registered for <c>rpcType</c>, so the deserialized
-        /// value matches the sender's actual concrete type rather than the converter's declared base type.
-        /// </summary>
-        /// <param name="obj">JSON element describing the root Unity object.</param>
-        /// <returns>The deserialized root object.</returns>
-        object DeserializeRoot(JsonElement obj)
-        {
-            if (!obj.TryGetProperty("rpcType", out var rpcTypeProp)
-                || !_rpcTypeToOrgType.TryGetValue(rpcTypeProp.GetString(), out Type targetType))
-            {
-                throw new ArgumentException($"RpcType not in {obj}");
-            }
-
-            if (obj.TryGetProperty("orgType", out var orgTypeProp) && orgTypeProp.ValueKind == JsonValueKind.String)
-            {
-                targetType = _typeResolver.Resolve(orgTypeProp.GetString());
-            }
-
-            return DeserializeWithFallback(obj.GetRawText(), targetType);
-        }
-
-        /// <summary>Deserialize raw JSON to a target type using the pre/main/fallback chain.</summary>
-        /// <param name="rawJson">Raw JSON text to deserialize.</param>
-        /// <param name="targetType">Target .NET type.</param>
-        /// <returns>The deserialized value.</returns>
-        object DeserializeWithFallback(string rawJson, Type targetType)
-        {
-            return _chain.Deserialize(rawJson, targetType);
         }
 
         /// <summary>Write all registered RPC method names to a CSV file (full_name, class_name, method_name).</summary>
@@ -463,8 +454,8 @@ namespace LLiquidLink
         public void SaveRpcNamesCsv(string path)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("full_name,class_name,method_name");
-            foreach (string fullName in _bus.RegisteredRpcNames)
+            _ = sb.AppendLine("full_name,class_name,method_name");
+            foreach (string fullName in RegisteredRpcNames)
             {
                 if (fullName.StartsWith("JsonRpc_") || fullName.StartsWith("OnServerError"))
                 {
@@ -476,37 +467,9 @@ namespace LLiquidLink
                 string prefix = lastDot >= 0 ? fullName[..lastDot] : "";
                 int prevDot = prefix.LastIndexOf('.');
                 string className = prevDot >= 0 ? prefix[(prevDot + 1)..] : prefix;
-                sb.AppendLine(fullName + "," + className + "," + methodName);
+                _ = sb.AppendLine(fullName + "," + className + "," + methodName);
             }
             File.WriteAllText(path, sb.ToString());
-        }
-
-        /// <summary>Resolve a single step: try registered property getters first, then direct method dispatch.</summary>
-        /// <param name="current">Current object in the resolution chain.</param>
-        /// <param name="name">Property or method name to resolve.</param>
-        /// <param name="stepArgs">Arguments for a method call step.</param>
-        /// <returns>The result of the resolved property or method.</returns>
-        object ResolveStep(object current, string name, JsonElement[] stepArgs)
-        {
-            if (current == null)
-            {
-                if (_rpcProperties.TryGetValue((null, name), out var rootProperty))
-                {
-                    _getLogger().DebugFormat("GetRootProperty {0}", name);
-                    return rootProperty.Method.DynamicInvoke(new object[] { null });
-                }
-                throw new ArgumentException("No root property '" + name + "' registered (obj is null)");
-            }
-
-            for (Type t = current.GetType(); t != null; t = t.BaseType)
-            {
-                if (_rpcProperties.TryGetValue((t, name), out var property))
-                {
-                    _getLogger().DebugFormat("GetProperty {0}.{1}", current, name);
-                    return property.Method.DynamicInvoke(current);
-                }
-            }
-            return _bus.DispatchDirectWithObj(current, name, stepArgs);
         }
     }
 }

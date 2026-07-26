@@ -1,21 +1,23 @@
 using LLiquidLink.Logger;
 using System;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 
 namespace LLiquidLink
 {
-    /// <summary>Reads JSON-RPC requests from a stream with 4-byte big-endian length framing, dispatches via RpcBus, and writes responses.</summary>
-    public class StdioTransport
+    /// <summary>
+    /// Reads JSON-RPC requests from the Python middleware's stdio streams with 4-byte little-endian
+    /// length framing, dispatches via <see cref="MethodCaller"/>, and writes responses.
+    /// </summary>
+    public class StdioTransport : ITransportServer
     {
+        const string Endpoint = "stdio";
+
         readonly IMainThreadDispatcher _dispatcher;
-        readonly RpcBus _bus;
+        readonly MethodCaller _caller;
         readonly JsonSerializerOptions _jsonOptions;
         readonly Func<ILogger> _getLogger;
-        readonly Action<Exception> _onError;
         readonly object _sendLock = new object();
 
         Stream _in;
@@ -23,60 +25,103 @@ namespace LLiquidLink
         Stream _err;
         Thread _readThread;
         Thread _errReadThread;
-        bool _running;
+        volatile bool _running;
+        bool _streamsAttached;
 
-        const int ClientId = 1;
+        /// <inheritdoc/>
+        public int ClientId { get; private set; }
 
-        /// <summary>Fired on the main thread when the stdio connection is established.</summary>
-        public event Action<int> OnConnect;
+        /// <inheritdoc/>
+        public event Action<int, string> OnConnect;
 
-        /// <summary>Fired on the main thread when the stdin stream closes.</summary>
+        /// <inheritdoc/>
         public event Action<int> OnDisconnect;
 
-        /// <summary>Initialize StdioTransport with its dependencies.</summary>
+        /// <inheritdoc/>
+        public event Action<int, ArraySegment<byte>> OnData;
+
+        /// <inheritdoc/>
+        public event Action<int, Exception> OnError;
+
+        /// <summary>Initialize StdioTransport with its dependencies. Call <see cref="AttachStreams"/> before <see cref="Start"/>.</summary>
         public StdioTransport(
             IMainThreadDispatcher dispatcher,
-            RpcBus bus,
+            MethodCaller caller,
             JsonSerializerOptions jsonOptions,
-            Func<ILogger> getLogger,
-            Action<Exception> onError = null)
+            Func<ILogger> getLogger)
         {
             _dispatcher = dispatcher;
-            _bus = bus;
+            _caller = caller;
             _jsonOptions = jsonOptions;
             _getLogger = getLogger;
-            _onError = onError;
         }
 
-        /// <summary>Start the read loop on a background thread and fire OnConnect.</summary>
+        /// <summary>Attach the Python middleware's stdio streams. Must be called once before <see cref="Start"/>.</summary>
         /// <param name="inStream">Stream to read requests from (Python middleware's stdout).</param>
         /// <param name="outStream">Stream to write responses to (Python middleware's stdin).</param>
-        public void Start(Stream inStream, Stream outStream, Stream errStream)
+        /// <param name="errStream">Stream to read the Python middleware's stderr from.</param>
+        public void AttachStreams(Stream inStream, Stream outStream, Stream errStream)
         {
             _in = inStream;
             _out = outStream;
             _err = errStream;
+            _streamsAttached = true;
+        }
+
+        /// <summary>Start the read loop on a background thread and fire <see cref="OnConnect"/>.</summary>
+        /// <exception cref="InvalidOperationException">Thrown when <see cref="AttachStreams"/> was not called first.</exception>
+        public void Start()
+        {
+            if (!_streamsAttached)
+            {
+                throw new InvalidOperationException("AttachStreams must be called before Start().");
+            }
+            ClientId = 1;
             _running = true;
             _readThread = new Thread(ReadLoop) { IsBackground = true, Name = "StdioTransport" };
             _readThread.Start();
             _errReadThread = new Thread(ErrorReadLoop) { IsBackground = true, Name = "StdioTransport-Err" };
             _errReadThread.Start();
-            _dispatcher.Enqueue(() => OnConnect?.Invoke(ClientId));
+            _dispatcher.Enqueue(() => OnConnect?.Invoke(ClientId, Endpoint));
         }
 
-        /// <summary>Signal the read loop to stop.</summary>
+        /// <summary>
+        /// Signal the read loop to stop and release its thread/stream resources. Closing the streams
+        /// unblocks the background threads' blocking reads so they can exit and be joined.
+        /// </summary>
         public void Stop()
         {
+            if (!_running)
+            {
+                return;
+            }
             _running = false;
+
+            try { _in?.Close(); } catch { }
+            try { _err?.Close(); } catch { }
+
+            _readThread?.Join(2000);
+            _errReadThread?.Join(2000);
+        }
+
+        /// <summary>Write <paramref name="data"/> to the Python middleware's stdin (there is only ever one stdio client).</summary>
+        public void SendAll(ArraySegment<byte> data)
+        {
+            Send(data.Array, data.Offset, data.Count);
         }
 
         // ── Framing ──────────────────────────────────────────────────────────────
 
         void Send(byte[] frame)
         {
+            Send(frame, 0, frame.Length);
+        }
+
+        void Send(byte[] buffer, int offset, int count)
+        {
             lock (_sendLock)
             {
-                _out.Write(frame, 0, frame.Length);
+                _out.Write(buffer, offset, count);
                 _out.Flush();
             }
         }
@@ -107,8 +152,13 @@ namespace LLiquidLink
             }
             catch (Exception ex)
             {
-                _getLogger().Info("StdioTransport read error: " + ex.Message);
-                _onError?.Invoke(ex);
+                // If _running is already false, Stop() closed the streams deliberately to unblock
+                // this read; that is expected shutdown noise, not a real transport error.
+                if (_running)
+                {
+                    _getLogger().Info("StdioTransport read error: " + ex.Message);
+                    _dispatcher.Enqueue(() => OnError?.Invoke(ClientId, ex));
+                }
             }
 
             if (_running)
@@ -131,12 +181,17 @@ namespace LLiquidLink
                 if (!string.IsNullOrEmpty(text))
                 {
                     _getLogger().Info("StdioTransport stderr: " + text);
-                    _onError?.Invoke(new Exception(text));
+                    var ex = new Exception(text);
+                    _dispatcher.Enqueue(() => OnError?.Invoke(ClientId, ex));
                 }
             }
             catch (Exception ex)
             {
-                _getLogger().Info("StdioTransport stderr read error: " + ex.Message);
+                // See ReadLoop: a deliberate Stop() closes _err to unblock this read.
+                if (_running)
+                {
+                    _getLogger().Info("StdioTransport stderr read error: " + ex.Message);
+                }
             }
         }
 
@@ -160,10 +215,13 @@ namespace LLiquidLink
 
         void Dispatch(byte[] rawJson)
         {
-            JsonDocument doc;
+            // Observation-only hook (mirrors ITransportServer.OnData); production code dispatches via MethodCaller below.
+            OnData?.Invoke(ClientId, new ArraySegment<byte>(rawJson));
+
+            RpcRequest req;
             try
             {
-                doc = JsonDocument.Parse(rawJson);
+                req = JsonSerializer.Deserialize<RpcRequest>(rawJson);
             }
             catch (JsonException ex)
             {
@@ -171,35 +229,33 @@ namespace LLiquidLink
                 return;
             }
 
-            using (doc)
+            if (string.IsNullOrEmpty(req.method))
             {
-                var root = doc.RootElement;
-                string method = root.GetProperty("method").GetString();
+                _getLogger().Info("StdioTransport message missing/invalid 'method'");
+                return;
+            }
 
-                JsonElement[] args = root.TryGetProperty("params", out JsonElement p)
-                    ? p.EnumerateArray().ToArray()
-                    : Array.Empty<JsonElement>();
+            JsonElement[] args = req.@params ?? Array.Empty<JsonElement>();
 
-                // Notification (no id): fire and forget
-                if (!root.TryGetProperty("id", out JsonElement idEl))
-                {
-                    try { _bus.Dispatch(method, args); }
-                    catch (Exception ex) { _getLogger().Info("Notify dispatch error " + method + ": " + ex.Message); }
-                    return;
-                }
+            // Notification (no id): fire and forget
+            if (req.id == null)
+            {
+                try { _caller.Call(req.method, args); }
+                catch (Exception ex) { _getLogger().Info("Notify dispatch error " + req.method + ": " + ex.Message); }
+                return;
+            }
 
-                string idJson = idEl.GetRawText();
-                try
-                {
-                    object result = _bus.Dispatch(method, args);
-                    Send(JsonRpcFraming.BuildResponse(idJson, result, null, _jsonOptions));
-                }
-                catch (Exception ex)
-                {
-                    Send(JsonRpcFraming.BuildResponse(idJson, null, ex.Message, _jsonOptions));
-                    _getLogger().Info("RPC error " + method + ": " + ex.Message);
-                    _onError?.Invoke(ex);
-                }
+            long id = req.id.Value;
+            try
+            {
+                object result = _caller.Call(req.method, args);
+                Send(JsonRpcFraming.BuildResponse(id, result, null, _jsonOptions));
+            }
+            catch (Exception ex)
+            {
+                Send(JsonRpcFraming.BuildResponse(id, null, ex.Message, _jsonOptions));
+                _getLogger().Info("RPC error " + req.method + ": " + ex.Message);
+                OnError?.Invoke(ClientId, ex);
             }
         }
     }

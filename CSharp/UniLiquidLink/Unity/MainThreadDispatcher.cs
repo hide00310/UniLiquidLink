@@ -20,12 +20,22 @@ namespace UniLiquidLink
         /// <summary>Unregister the drain loop from <see cref="EditorApplication.update"/>.</summary>
         public void Stop() { EditorApplication.update -= ProcessAll; }
 
-        /// <summary>Dequeue and invoke all pending actions in the current update tick.</summary>
+        /// <summary>
+        /// Dequeue and invoke all pending actions in the current update tick. Each action is isolated so
+        /// one throwing does not prevent the rest of the tick's actions from running.
+        /// </summary>
         void ProcessAll()
         {
             while (_queue.TryDequeue(out Action action))
             {
-                action();
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    UnityEngine.Debug.LogException(ex);
+                }
             }
         }
     }

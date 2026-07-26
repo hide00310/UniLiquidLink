@@ -40,7 +40,15 @@ namespace LLiquidLink
             AddAssembly(asm);
             foreach (var refName in asm.GetReferencedAssemblies())
             {
-                AddAssembly(Assembly.Load(refName));
+                try
+                {
+                    AddAssembly(Assembly.Load(refName));
+                }
+                catch (Exception)
+                {
+                    // A referenced assembly may not be loadable at runtime (e.g. platform-specific
+                    // or trimmed); skip it rather than aborting the whole registration.
+                }
             }
         }
 

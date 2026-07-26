@@ -24,18 +24,22 @@ namespace UniLiquidLink
     {
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            using var doc = JsonDocument.ParseValue(ref reader);
-            string rawJson = doc.RootElement.GetRawText();
-            object result;
-            result = JsonUtility.FromJson(rawJson, typeToConvert);
-            return (T)result;
+            using (var doc = JsonDocument.ParseValue(ref reader))
+            {
+                string rawJson = doc.RootElement.GetRawText();
+                object result;
+                result = JsonUtility.FromJson(rawJson, typeToConvert);
+                return (T)result;
+            }
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         {
             string json = JsonUtility.ToJson(value);
-            using var doc = JsonDocument.Parse(json);
-            doc.RootElement.WriteTo(writer);
+            using (var doc = JsonDocument.Parse(json))
+            {
+                doc.RootElement.WriteTo(writer);
+            }
         }
     }
 }
