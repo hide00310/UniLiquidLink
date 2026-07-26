@@ -41,8 +41,8 @@ public class ObjectRegistryTests
         var go = new GameObject("__ObjReg_Remove");
         try
         {
-            int id = (int)_reg.RegisterObject(go);
-            var removed = new List<int>();
+            long id = _reg.RegisterObject(go);
+            var removed = new List<long>();
             _reg.OnRemoveObject += i => removed.Add(i);
             _reg.RemoveObject(id);
             Assert.AreEqual(1, removed.Count);

@@ -181,7 +181,7 @@ namespace UniLiquidLink
             }
 
             SetupIntegrationTest.Setup();
-            _inner = new UniLiquidLinkIntegrationTest(pythonServerStartCommand);
+            _inner = new UniLiquidLinkIntegrationTest(pythonServerStartCommand + " -m lliquidlink.server");
             _inner.server.Start();
         }
 

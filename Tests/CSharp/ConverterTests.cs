@@ -26,6 +26,7 @@ public class ConverterTests
         _opts.Converters.Add(new TypeConverter(_resolver));
         _opts.Converters.Add(new EnumConverter());
         _opts.Converters.Add(new PreObjectConverter(_reg));
+        _opts.Converters.Add(new UnityObjectConverter(_reg));
 
         _primitiveOpts = new JsonSerializerOptions();
         _primitiveOpts.Converters.Add(new ObjectPrimitiveConverter());
@@ -47,7 +48,7 @@ public class ConverterTests
     [Test]
     public void TypeConverter_Read_ResolvesType()
     {
-        var type = JsonSerializer.Deserialize<Type>(@"{""type"":""type"",""value"":""System.Int32""}", _opts);
+        var type = JsonSerializer.Deserialize<Type>(@"{""rpcType"":1,""value"":""System.Int32""}", _opts);
         Assert.AreEqual(typeof(int), type);
     }
 
@@ -61,7 +62,7 @@ public class ConverterTests
     // ─── UnityObjectConverter ────────────────────────────────────────────────
 
     [Test]
-    public void UnityObjectConverter_Write_ProducesRpcUnityObjectFields()
+    public void UnityObjectConverter_Write_ProducesRpcInstanceObjectFields()
     {
         var go = new GameObject("__ConvWrite");
         try
@@ -69,7 +70,7 @@ public class ConverterTests
             string json = JsonSerializer.Serialize<UnityEngine.Object>(go, _opts);
             var doc = JsonDocument.Parse(json).RootElement;
             Assert.AreEqual("UnityEngine.GameObject", doc.GetProperty("orgType").GetString());
-            Assert.AreEqual("__ConvWrite", doc.GetProperty("name").GetString());
+            Assert.AreEqual(go.ToString(), doc.GetProperty("name").GetString());
             Assert.IsTrue(doc.TryGetProperty("instanceId", out _));
         }
         finally { UnityEngine.Object.DestroyImmediate(go); }
@@ -82,7 +83,7 @@ public class ConverterTests
         try
         {
             long id = _reg.RegisterObject(go);
-            string json = $@"{{""rpcType"":""{typeof(RpcUnityObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.GameObject"",""name"":""__ConvRead"",""attributes"":[""InstanceObject""]}}";
+            string json = $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.GameObject"",""name"":""__ConvRead""}}";
             var result = JsonSerializer.Deserialize<UnityEngine.Object>(json, _opts);
             Assert.AreEqual(go, result);
         }
@@ -90,26 +91,26 @@ public class ConverterTests
     }
 
     [Test]
-    public void UnityObjectConverter_Read_UnknownId_ThrowsArgumentException()
+    public void UnityObjectConverter_Read_UnknownId_ThrowsRpcJsonConverterReadException()
     {
-        string json = $@"{{""rpcType"":""{typeof(RpcUnityObject).FullName}"",""instanceId"":99999999,""orgType"":""UnityEngine.GameObject"",""name"":""missing"",""attributes"":[""InstanceObject""]}}";
-        Assert.Throws<ArgumentException>(() =>
+        string json = $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":99999999,""orgType"":""UnityEngine.GameObject"",""name"":""missing""}}";
+        Assert.Throws<RpcJsonConverterReadException>(() =>
             JsonSerializer.Deserialize<UnityEngine.Object>(json, _opts));
     }
 
     // ─── PreObjectConverter ──────────────────────────────────────────────────
 
     [Test]
-    public void PreObjectConverter_Write_ProducesRpcUnityObjectFields()
+    public void PreObjectConverter_Write_NonNullValue_ThrowsNotSupportedException()
     {
+        // PreObjectConverter is registered pre-stage only (read-side); writes of an object-typed
+        // value (whether a Unity object reference or a primitive) go through the main stage instead
+        // (InstanceObjectConverter / ObjectPrimitiveConverter), so Write is always unsupported here.
         var go = new GameObject("__PreConvWrite");
         try
         {
-            string json = JsonSerializer.Serialize<object>(go, _opts);
-            var doc = JsonDocument.Parse(json).RootElement;
-            Assert.AreEqual("UnityEngine.GameObject", doc.GetProperty("orgType").GetString());
-            Assert.AreEqual(go.ToString(), doc.GetProperty("name").GetString());
-            Assert.IsTrue(doc.TryGetProperty("instanceId", out _));
+            Assert.Throws<NotSupportedException>(() =>
+                JsonSerializer.Serialize<object>(go, _opts));
         }
         finally { UnityEngine.Object.DestroyImmediate(go); }
     }
@@ -121,7 +122,7 @@ public class ConverterTests
         try
         {
             long id = _reg.RegisterObject(go);
-            string json = $@"{{""rpcType"":""{typeof(RpcUnityObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.GameObject"",""name"":""__PreConvRead""}}";
+            string json = $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.GameObject"",""name"":""__PreConvRead""}}";
             var result = JsonSerializer.Deserialize<object>(json, _opts);
             Assert.AreSame(go, result);
         }
@@ -129,10 +130,10 @@ public class ConverterTests
     }
 
     [Test]
-    public void PreObjectConverter_Read_UnknownId_ThrowsArgumentException()
+    public void PreObjectConverter_Read_UnknownId_ThrowsRpcJsonConverterReadException()
     {
-        string json = $@"{{""rpcType"":""{typeof(RpcUnityObject).FullName}"",""instanceId"":99999999,""orgType"":""UnityEngine.GameObject"",""name"":""missing""}}";
-        Assert.Throws<ArgumentException>(() =>
+        string json = $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":99999999,""orgType"":""UnityEngine.GameObject"",""name"":""missing""}}";
+        Assert.Throws<RpcJsonConverterReadException>(() =>
             JsonSerializer.Deserialize<object>(json, _opts));
     }
 
@@ -143,7 +144,7 @@ public class ConverterTests
         try
         {
             long id = _reg.RegisterObject(go);
-            string json = $@"{{""rpcType"":""{typeof(RpcUnityObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.Transform"",""name"":""__PreConvMismatch""}}";
+            string json = $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.Transform"",""name"":""__PreConvMismatch""}}";
             Assert.Throws<RpcJsonConverterReadException>(() =>
                 JsonSerializer.Deserialize<object>(json, _opts));
         }
@@ -211,9 +212,9 @@ public class ConverterTests
     }
 
     [Test]
-    public void EnumConverter_Read_UnknownValue_ThrowsArgumentException()
+    public void EnumConverter_Read_UnknownValue_ThrowsRpcJsonConverterReadException()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<RpcJsonConverterReadException>(() =>
             JsonSerializer.Deserialize<SampleEnum>(@"{""value"":""NoSuchValue"",""rpcEnum"":1}", _opts));
     }
 }

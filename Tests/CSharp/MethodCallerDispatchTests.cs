@@ -1,4 +1,4 @@
-using LLiquidLink;
+﻿using LLiquidLink;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -8,16 +8,21 @@ using UniLiquidLink;
 using UnityEngine;
 
 [TestFixture]
-public class RpcBusDispatchTests
+public class MethodCallerDispatchTests
 {
-    RpcBus _bus;
+    RpcRegistry _rpc;
+    MethodCaller _caller;
 
     [SetUp]
     public void SetUp()
     {
-        _bus = new RpcBus(
-            () => new UniLiquidLink.Server.NullLogger(),
-            new JsonSerializerChain(new JsonSerializerOptions(), new JsonSerializerOptions(), new JsonSerializerOptions()));
+        var chain = new JsonSerializerChain();
+        _rpc = new RpcRegistry(() => new UniLiquidLink.Server.NullLogger());
+        _caller = new MethodCaller(() => new UniLiquidLink.Server.NullLogger(), chain, _rpc.Searcher);
+        _rpc.Register("JsonRpc_ResolveChain",
+            (Func<RpcResolveChainParam, object>)_caller.JsonRpc_ResolveChain);
+        _rpc.Register("JsonRpc_ResolveChainSet",
+            (Func<RpcResolveChainSetParam, object>)_caller.JsonRpc_ResolveChainSet);
     }
 
     object DispatchSync(string method, params string[] jsonArgs)
@@ -28,7 +33,7 @@ public class RpcBusDispatchTests
             args[i] = JsonDocument.Parse(jsonArgs[i]).RootElement;
         }
 
-        return _bus.Dispatch(method, args);
+        return _caller.Call(method, args);
     }
 
     // ─── Register + Dispatch ─────────────────────────────────────────────────
@@ -36,7 +41,7 @@ public class RpcBusDispatchTests
     [Test]
     public void Dispatch_RegisteredFunc_ReturnsResult()
     {
-        _bus.Register("echo", (Func<int, int>)(x => x * 2));
+        _rpc.Register("echo", (Func<int, int>)(x => x * 2));
         var result = (JsonElement)DispatchSync("echo", "21");
         Assert.AreEqual(42, result.GetInt32());
     }
@@ -44,7 +49,7 @@ public class RpcBusDispatchTests
     [Test]
     public void Dispatch_RegisteredStringFunc()
     {
-        _bus.Register("greet", (Func<string, string>)(name => "hello " + name));
+        _rpc.Register("greet", (Func<string, string>)(name => "hello " + name));
         var result = (JsonElement)DispatchSync("greet", @"""world""");
         Assert.AreEqual("hello world", result.GetString());
     }
@@ -52,15 +57,15 @@ public class RpcBusDispatchTests
     [Test]
     public void Dispatch_Unknown_ThrowsKeyNotFoundException()
     {
-        Assert.Throws<KeyNotFoundException>(() => _bus.Dispatch("unknown", Array.Empty<JsonElement>()));
+        Assert.Throws<KeyNotFoundException>(() => _caller.Call("unknown", Array.Empty<JsonElement>()));
     }
 
     [Test]
     public void Dispatch_TooManyArgs_Throws()
     {
-        _bus.Register("noArgs", (Func<int>)(() => 42));
+        _rpc.Register("noArgs", (Func<int>)(() => 42));
         var args = new JsonElement[] { JsonDocument.Parse("1").RootElement };
-        Assert.Throws<ArgumentException>(() => _bus.Dispatch("noArgs", args));
+        Assert.Throws<ArgumentException>(() => _caller.Call("noArgs", args));
     }
 
     // ─── RegisterDirect + DispatchDirectWithObj ───────────────────────────────
@@ -73,7 +78,7 @@ public class RpcBusDispatchTests
         {
             MethodInfo method = typeof(GameObject).GetMethod("CompareTag",
                 new Type[] { typeof(string) });
-            _bus.RegisterDirect(
+            _rpc.RegisterDirect(
                 "_compareTag",
                 typeof(GameObject),
                 "CompareTag",
@@ -82,7 +87,7 @@ public class RpcBusDispatchTests
                 "UnityEngine.GameObject.CompareTag"
             );
             var restArgs = new JsonElement[] { JsonDocument.Parse(@"""Untagged""").RootElement };
-            var result = _bus.DispatchDirectWithObj(go, "CompareTag", restArgs);
+            var result = _caller.CallDirectWithObj(go, "CompareTag", restArgs);
             Assert.AreEqual(true, result);
         }
         finally { UnityEngine.Object.DestroyImmediate(go); }
@@ -95,7 +100,7 @@ public class RpcBusDispatchTests
         try
         {
             Assert.Throws<KeyNotFoundException>(() =>
-                _bus.DispatchDirectWithObj(go, "NoSuchDirectMethod", Array.Empty<JsonElement>()));
+                _caller.CallDirectWithObj(go, "NoSuchDirectMethod", Array.Empty<JsonElement>()));
         }
         finally { UnityEngine.Object.DestroyImmediate(go); }
     }

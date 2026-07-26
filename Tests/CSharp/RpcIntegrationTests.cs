@@ -79,7 +79,7 @@ public class RpcIntegrationTests
         string goRpcObj = JsonDocument.Parse(findResp).RootElement.GetProperty("result").GetRawText();
 
         string req = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[],""transform"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""transform"",""args"":null}}]}}",
             goRpcObj);
         string resp = _ctx.SendAndGetResponse(req);
         AssertMatchesGolden("golden_resolve_chain_get_transform", resp);
@@ -93,7 +93,7 @@ public class RpcIntegrationTests
         string goRpcObj = JsonDocument.Parse(findResp).RootElement.GetProperty("result").GetRawText();
 
         string req = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":6,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[{{""name"":""transform""}}],""gameObject"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":6,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""method"":""gameObject"",""args"":null}}]}}",
             goRpcObj);
         string resp = _ctx.SendAndGetResponse(req);
         AssertMatchesGolden("golden_resolve_chain_chained_step", resp);
@@ -107,13 +107,13 @@ public class RpcIntegrationTests
         string goRpcObj = JsonDocument.Parse(findResp).RootElement.GetProperty("result").GetRawText();
 
         string tReq = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[],""transform"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""transform"",""args"":null}}]}}",
             goRpcObj);
         string tResp = _ctx.SendAndGetResponse(tReq);
         string tRpcObj = JsonDocument.Parse(tResp).RootElement.GetProperty("result").GetRawText();
 
         string req = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":7,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[],""Rotate"",[10.0,20.0,30.0,{{""value"":""Self"",""rpcEnum"":1}}]]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":7,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""Rotate"",""args"":[10.0,20.0,30.0,{{""value"":""Self"",""rpcEnum"":1}}]}}]}}",
             tRpcObj);
         string resp = _ctx.SendAndGetResponse(req);
         AssertMatchesGolden("golden_resolve_chain_rotate", resp);
@@ -128,12 +128,12 @@ public class RpcIntegrationTests
 
         // Set transform.position, then read it back to verify the assignment took effect.
         string setReq = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":8,""method"":""JsonRpc_ResolveChainSet"",""params"":[{0},[{{""name"":""transform""}}],""position"",{{""x"":1,""y"":2,""z"":3}}]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":8,""method"":""JsonRpc_ResolveChainSet"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""property"":""position"",""value"":{{""x"":1,""y"":2,""z"":3}}}}]}}",
             goRpcObj);
         _ctx.SendAndGetResponse(setReq);
 
         string getReq = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":9,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[{{""name"":""transform""}}],""position"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":9,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""method"":""position"",""args"":null}}]}}",
             goRpcObj);
         string resp = _ctx.SendAndGetResponse(getReq);
         AssertMatchesGolden("golden_resolve_chain_set_position", resp);

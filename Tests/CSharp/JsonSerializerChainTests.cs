@@ -46,11 +46,11 @@ public class JsonSerializerChainTests
         }
     }
 
-    static JsonSerializerOptions BuildOptions(string stageName, List<string> log, Func<Marker> onRead = null, Action onWrite = null)
+    static void AddScriptedConverter(
+        JsonSerializerChain chain, JsonSerializerChain.Stage stage,
+        string stageName, List<string> log, Func<Marker> onRead = null, Action onWrite = null)
     {
-        var opts = new JsonSerializerOptions();
-        opts.Converters.Add(new ScriptedConverter(stageName, log, onRead, onWrite));
-        return opts;
+        chain.Options[(int)stage].Converters.Add(new ScriptedConverter(stageName, log, onRead, onWrite));
     }
 
     // ─── Deserialize ───────────────────────────────────────────────────────
@@ -60,10 +60,10 @@ public class JsonSerializerChainTests
     {
         var log = new List<string>();
         var marker = new Marker();
-        var pre = BuildOptions("pre", log, onRead: () => marker);
-        var main = BuildOptions("main", log, onRead: () => throw new InvalidOperationException("main should not run"));
-        var fallback = BuildOptions("fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => marker);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => throw new InvalidOperationException("main should not run"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
 
         object result = chain.Deserialize("{}", typeof(Marker));
 
@@ -76,10 +76,10 @@ public class JsonSerializerChainTests
     {
         var log = new List<string>();
         var marker = new Marker();
-        var pre = BuildOptions("pre", log, onRead: () => null);
-        var main = BuildOptions("main", log, onRead: () => marker);
-        var fallback = BuildOptions("fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => null);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => marker);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
 
         object result = chain.Deserialize("{}", typeof(Marker));
 
@@ -91,10 +91,10 @@ public class JsonSerializerChainTests
     public void Deserialize_MainReturnsNull_ReturnsNullWithoutTryingFallback()
     {
         var log = new List<string>();
-        var pre = BuildOptions("pre", log, onRead: () => null);
-        var main = BuildOptions("main", log, onRead: () => null);
-        var fallback = BuildOptions("fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => null);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => null);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
 
         object result = chain.Deserialize("{}", typeof(Marker));
 
@@ -106,10 +106,10 @@ public class JsonSerializerChainTests
     public void Deserialize_MainThrowsReadException_PropagatesWithoutTryingFallback()
     {
         var log = new List<string>();
-        var pre = BuildOptions("pre", log, onRead: () => null);
-        var main = BuildOptions("main", log, onRead: () => throw new RpcJsonConverterReadException("mismatch"));
-        var fallback = BuildOptions("fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => null);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => throw new RpcJsonConverterReadException("mismatch"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
 
         Assert.Throws<RpcJsonConverterReadException>(() => chain.Deserialize("{}", typeof(Marker)));
         CollectionAssert.AreEqual(new[] { "pre", "main" }, log);
@@ -120,10 +120,10 @@ public class JsonSerializerChainTests
     {
         var log = new List<string>();
         var marker = new Marker();
-        var pre = BuildOptions("pre", log, onRead: () => null);
-        var main = BuildOptions("main", log, onRead: () => throw new InvalidOperationException("boom"));
-        var fallback = BuildOptions("fallback", log, onRead: () => marker);
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => null);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => throw new InvalidOperationException("boom"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => marker);
 
         object result = chain.Deserialize("{}", typeof(Marker));
 
@@ -132,14 +132,27 @@ public class JsonSerializerChainTests
     }
 
     [Test]
+    public void Deserialize_PreThrowsReadException_PropagatesWithoutTryingMainOrFallback()
+    {
+        var log = new List<string>();
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => throw new RpcJsonConverterReadException("mismatch"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => throw new InvalidOperationException("main should not run"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
+
+        Assert.Throws<RpcJsonConverterReadException>(() => chain.Deserialize("{}", typeof(Marker)));
+        CollectionAssert.AreEqual(new[] { "pre" }, log);
+    }
+
+    [Test]
     public void Deserialize_PreThrows_ExceptionSwallowedAndFallsThroughToMain()
     {
         var log = new List<string>();
         var marker = new Marker();
-        var pre = BuildOptions("pre", log, onRead: () => throw new InvalidOperationException("pre boom"));
-        var main = BuildOptions("main", log, onRead: () => marker);
-        var fallback = BuildOptions("fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => throw new InvalidOperationException("pre boom"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => marker);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
 
         object result = chain.Deserialize("{}", typeof(Marker));
 
@@ -150,10 +163,7 @@ public class JsonSerializerChainTests
     [Test]
     public void Deserialize_ObjectTypeWithNoConverter_ThrowsJsonElementLeakException()
     {
-        var pre = new JsonSerializerOptions();
-        var main = new JsonSerializerOptions();
-        var fallback = new JsonSerializerOptions();
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
 
         Assert.Throws<JsonElementLeakException>(() => chain.Deserialize("{}", typeof(object)));
     }
@@ -161,10 +171,7 @@ public class JsonSerializerChainTests
     [Test]
     public void Deserialize_JsonElementTargetType_DoesNotThrow()
     {
-        var pre = new JsonSerializerOptions();
-        var main = new JsonSerializerOptions();
-        var fallback = new JsonSerializerOptions();
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
 
         object result = chain.Deserialize(@"{""a"":1}", typeof(JsonElement));
 
@@ -178,10 +185,10 @@ public class JsonSerializerChainTests
     public void Serialize_PreSucceeds_ReturnsImmediatelyWithoutTryingOtherStages()
     {
         var log = new List<string>();
-        var pre = BuildOptions("pre", log);
-        var main = BuildOptions("main", log, onWrite: () => throw new InvalidOperationException("main should not run"));
-        var fallback = BuildOptions("fallback", log, onWrite: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onWrite: () => throw new InvalidOperationException("main should not run"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onWrite: () => throw new InvalidOperationException("fallback should not run"));
 
         chain.SerializeToElement(new Marker(), typeof(Marker));
 
@@ -192,10 +199,10 @@ public class JsonSerializerChainTests
     public void Serialize_PreThrows_FallsThroughToMain()
     {
         var log = new List<string>();
-        var pre = BuildOptions("pre", log, onWrite: () => throw new InvalidOperationException("pre boom"));
-        var main = BuildOptions("main", log);
-        var fallback = BuildOptions("fallback", log, onWrite: () => throw new InvalidOperationException("fallback should not run"));
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onWrite: () => throw new InvalidOperationException("pre boom"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onWrite: () => throw new InvalidOperationException("fallback should not run"));
 
         chain.SerializeToElement(new Marker(), typeof(Marker));
 
@@ -206,10 +213,10 @@ public class JsonSerializerChainTests
     public void Serialize_MainThrows_FallsThroughToFallback()
     {
         var log = new List<string>();
-        var pre = BuildOptions("pre", log, onWrite: () => throw new InvalidOperationException("pre boom"));
-        var main = BuildOptions("main", log, onWrite: () => throw new InvalidOperationException("main boom"));
-        var fallback = BuildOptions("fallback", log);
-        var chain = new JsonSerializerChain(pre, main, fallback);
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onWrite: () => throw new InvalidOperationException("pre boom"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onWrite: () => throw new InvalidOperationException("main boom"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log);
 
         chain.SerializeToElement(new Marker(), typeof(Marker));
 
