@@ -24,6 +24,21 @@
       "displayName": "UniLiquidLink Samples",
       "description": "Cube Demo and All Features Tour in a single sample window covering JSON-RPC bridge basics and the full feature set.",
       "path": "Samples~/UniLiquidLinkSample"
+    },
+    {
+      "displayName": "Docs",
+      "description": "documents",
+      "path": "Docs~"
+    },
+    {
+      "displayName": "Python",
+      "description": "Python",
+      "path": "Python~"
+    },
+    {
+      "displayName": "Tools",
+      "description": "Tools",
+      "path": "tools~"
     }
   ]
 }
