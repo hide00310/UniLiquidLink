@@ -53,7 +53,7 @@ class FakeBridge:
             raise RuntimeError("Method not found: " + method)
         return self._results[method]
 
-    def notify(self, method, params):
+    async def anotify(self, method, params):
         self.notifications.append((method, params))
 
 
@@ -149,7 +149,7 @@ async def test_tcp_server_transport_round_trip():
 
             reader = BufferedByteReceiveStream(stream)
             header = await reader.receive_exactly(4)
-            length = int.from_bytes(header, "big")
+            length = int.from_bytes(header, "little")
             body = await reader.receive_exactly(length)
             response = decode_frame(header + body)
             assert response["id"] == 1
@@ -316,38 +316,38 @@ def test_try_resolve_no_lookup():
 def test_resolve_chain_params_resolves_first_step():
     r = _resolver_with_entries({("A", "B"): "X.A.B"})
     r.add_abbreviated_classes("A")
-    params = [None, [{"name": "B"}, {"name": "C"}], "D", [1, 2]]
+    params = [{"obj": None, "steps": [{"name": "B"}, {"name": "C"}], "method": "D", "args": [1, 2]}]
     result = r.resolve_chain_params(params)
-    assert result == [None, [{"name": "X.A.B"}, {"name": "C"}], "D", [1, 2]]
+    assert result == [{"obj": None, "steps": [{"name": "X.A.B"}, {"name": "C"}], "method": "D", "args": [1, 2]}]
 
 
 def test_resolve_chain_params_obj_not_null():
     r = _resolver_with_entries({("A", "B"): "X.A.B"})
     r.add_abbreviated_classes("A")
-    params = [{"rpcType": "T"}, [{"name": "B"}], "D", []]
+    params = [{"obj": {"rpcType": "T"}, "steps": [{"name": "B"}], "method": "D", "args": []}]
     assert r.resolve_chain_params(params) == params
 
 
 def test_resolve_chain_params_unregistered_first_step():
     r = _resolver_with_entries({("A", "B"): "X.A.B"})
     r.add_abbreviated_classes("A")
-    params = [None, [{"name": "Other"}], "D", []]
+    params = [{"obj": None, "steps": [{"name": "Other"}], "method": "D", "args": []}]
     assert r.resolve_chain_params(params) == params
 
 
 def test_resolve_chain_params_empty_steps():
     r = _resolver_with_entries({("A", "B"): "X.A.B"})
     r.add_abbreviated_classes("A")
-    params = [None, [], "D", []]
+    params = [{"obj": None, "steps": [], "method": "D", "args": []}]
     assert r.resolve_chain_params(params) == params
 
 
 def test_resolve_chain_params_does_not_mutate_original():
     r = _resolver_with_entries({("A", "B"): "X.A.B"})
     r.add_abbreviated_classes("A")
-    params = [None, [{"name": "B"}], "D", []]
+    params = [{"obj": None, "steps": [{"name": "B"}], "method": "D", "args": []}]
     r.resolve_chain_params(params)
-    assert params == [None, [{"name": "B"}], "D", []]
+    assert params == [{"obj": None, "steps": [{"name": "B"}], "method": "D", "args": []}]
 
 
 # ── _handle_client chain first-step resolution ────────────────────────────────
@@ -359,15 +359,15 @@ async def test_handle_client_resolves_chain_first_step():
     r.add_abbreviated_classes("A")
     frame = encode_frame({
         "jsonrpc": "2.0", "id": 11, "method": "JsonRpc_ResolveChain",
-        "params": [None, [{"name": "B"}, {"name": "C"}], "D", [1]],
+        "params": [{"obj": None, "steps": [{"name": "B"}, {"name": "C"}], "method": "D", "args": [1]}],
     })
     ws = FakeWebSocket([frame])
     bridge = FakeBridge({"JsonRpc_ResolveChain": None})
     await _handle_client(ws, bridge, r)
     method, params = bridge.calls[0]
     assert method == "JsonRpc_ResolveChain"
-    assert params[1][0]["name"] == "X.A.B"
-    assert params[1][1]["name"] == "C"
+    assert params[0]["steps"][0]["name"] == "X.A.B"
+    assert params[0]["steps"][1]["name"] == "C"
 
 
 @pytest.mark.asyncio
@@ -377,14 +377,14 @@ async def test_handle_client_resolves_chainset_first_step():
     r.add_abbreviated_classes("A")
     frame = encode_frame({
         "jsonrpc": "2.0", "id": 12, "method": "JsonRpc_ResolveChainSet",
-        "params": [None, [{"name": "B"}], "P", 5],
+        "params": [{"obj": None, "steps": [{"name": "B"}], "property": "P", "value": 5}],
     })
     ws = FakeWebSocket([frame])
     bridge = FakeBridge({"JsonRpc_ResolveChainSet": None})
     await _handle_client(ws, bridge, r)
     method, params = bridge.calls[0]
     assert method == "JsonRpc_ResolveChainSet"
-    assert params[1][0]["name"] == "X.A.B"
+    assert params[0]["steps"][0]["name"] == "X.A.B"
 
 
 @pytest.mark.asyncio
@@ -394,13 +394,13 @@ async def test_handle_client_chain_obj_not_null_unchanged():
     r.add_abbreviated_classes("A")
     frame = encode_frame({
         "jsonrpc": "2.0", "id": 13, "method": "JsonRpc_ResolveChain",
-        "params": [{"rpcType": "T"}, [{"name": "B"}], "D", []],
+        "params": [{"obj": {"rpcType": "T"}, "steps": [{"name": "B"}], "method": "D", "args": []}],
     })
     ws = FakeWebSocket([frame])
     bridge = FakeBridge({"JsonRpc_ResolveChain": None})
     await _handle_client(ws, bridge, r)
     method, params = bridge.calls[0]
-    assert params[1][0]["name"] == "B"
+    assert params[0]["steps"][0]["name"] == "B"
 
 
 # ── RpcNameResolver.try_resolve_class_method ──────────────────────────────────
@@ -425,7 +425,7 @@ def test_collapse_static_chain_one_step():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [None, [{"name": "GameObject"}], "Find", ["UniLiquidLinkTestObject"]],
+        [{"obj": None, "steps": [{"name": "GameObject"}], "method": "Find", "args": ["UniLiquidLinkTestObject"]}],
     )
     assert result == ("UnityEngine.GameObject.Find", ["UniLiquidLinkTestObject"])
 
@@ -434,7 +434,7 @@ def test_collapse_static_chain_deep():
     r = _resolver_with_entries({("C", "D"): "A.B.C.D"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [None, [{"name": "B"}, {"name": "C"}], "D", [42]],
+        [{"obj": None, "steps": [{"name": "B"}, {"name": "C"}], "method": "D", "args": [42]}],
     )
     assert result == ("A.B.C.D", [42])
 
@@ -443,7 +443,7 @@ def test_collapse_static_chain_obj_not_null():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [{"rpcType": "T"}, [{"name": "GameObject"}], "Find", []],
+        [{"obj": {"rpcType": "T"}, "steps": [{"name": "GameObject"}], "method": "Find", "args": []}],
     )
     assert result is None
 
@@ -452,7 +452,7 @@ def test_collapse_static_chain_unregistered():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [None, [{"name": "Other"}], "Find", []],
+        [{"obj": None, "steps": [{"name": "Other"}], "method": "Find", "args": []}],
     )
     assert result is None
 
@@ -461,7 +461,7 @@ def test_collapse_static_chain_skips_direct_method():
     r = _resolver_with_entries({("AssetDatabase", "LoadAssetAtPath"): "_UnityEditor.AssetDatabase.LoadAssetAtPath"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [None, [{"name": "AssetDatabase"}], "LoadAssetAtPath", []],
+        [{"obj": None, "steps": [{"name": "AssetDatabase"}], "method": "LoadAssetAtPath", "args": []}],
     )
     assert result is None
 
@@ -470,7 +470,7 @@ def test_collapse_static_chain_empty_steps():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChain",
-        [None, [], "Find", []],
+        [{"obj": None, "steps": [], "method": "Find", "args": []}],
     )
     assert result is None
 
@@ -479,7 +479,7 @@ def test_collapse_static_chain_not_call_form():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     result = r.try_collapse_static_chain(
         "JsonRpc_ResolveChainSet",
-        [None, [{"name": "GameObject"}], "Find", []],
+        [{"obj": None, "steps": [{"name": "GameObject"}], "property": "Find", "value": []}],
     )
     assert result is None
 
@@ -492,7 +492,7 @@ async def test_handle_client_collapses_static_chain():
     r = _resolver_with_entries({("GameObject", "Find"): "UnityEngine.GameObject.Find"})
     frame = encode_frame({
         "jsonrpc": "2.0", "id": 20, "method": "JsonRpc_ResolveChain",
-        "params": [None, [{"name": "GameObject"}], "Find", ["TestObject"]],
+        "params": [{"obj": None, "steps": [{"name": "GameObject"}], "method": "Find", "args": ["TestObject"]}],
     })
     ws = FakeWebSocket([frame])
     bridge = FakeBridge({"UnityEngine.GameObject.Find": None})

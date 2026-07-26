@@ -33,6 +33,10 @@ async def test_find_test_object(client):
     assert_golden("find_test_object", await client._exec(IntegrationClient.run_find_test_object))
 
 @pytest.mark.asyncio(loop_scope="session")
+async def test_gc_flush(client):
+    assert_golden("gc_flush", await client._exec(IntegrationClient.run_gc_flush))
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_get_transform(client):
     assert_golden("get_transform", await client._exec(IntegrationClient.run_get_transform))
 

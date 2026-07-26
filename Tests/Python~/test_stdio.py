@@ -9,7 +9,7 @@ from anyio.streams.buffered import BufferedByteReceiveStream
 
 from lliquidlink.core import JsonRpcPeer, StdioByteStream, encode_frame
 
-_LEN = struct.Struct(">I")
+_LEN = struct.Struct("<I")
 
 
 async def _echo_server(stream):
