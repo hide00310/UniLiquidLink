@@ -1,10 +1,11 @@
+from __future__ import annotations
 import logging
 import os
 
 module_dir = os.path.abspath(os.path.dirname(__file__))
 
 logger = logging.getLogger(__name__)
-def setup_logger():
+def setup_logger() -> None:
     level = logging.INFO
     log_path = f"{module_dir}/log.log"
     try:

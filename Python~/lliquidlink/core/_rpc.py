@@ -1,7 +1,7 @@
 """Core JSON-RPC 2.0 peer over a length-prefixed byte stream (anyio-based).
 
 Shared by the client transports and the server middleware. Framing is a 4-byte
-big-endian length prefix followed by a UTF-8 JSON body, matching the C# wire
+little-endian length prefix followed by a UTF-8 JSON body, matching the C# wire
 protocol. This module owns request/response correlation and the receive loop;
 each transport only has to supply a byte stream.
 """
@@ -9,15 +9,17 @@ from __future__ import annotations
 import json
 import struct
 import sys
-from typing import Any
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Union
 
 import anyio
 from anyio.streams.buffered import BufferedByteReceiveStream
 
+from ._interfaces import ByteStream
+
 import logging
 logger = logging.getLogger(__name__)
 
-_LEN = struct.Struct(">I")
+_LEN = struct.Struct("<I")
 
 # Stream-end conditions that terminate the receive loop.
 _STREAM_END = (
@@ -36,8 +38,8 @@ class RpcError(Exception):
     """Raised when the server returns a JSON-RPC error response."""
 
 
-def encode_frame(msg: dict, default=None) -> bytes:
-    """Encode a message as a 4-byte big-endian length prefix + JSON body.
+def encode_frame(msg: Dict[str, Any], default: Optional[Callable[[Any], Any]] = None) -> bytes:
+    """Encode a message as a 4-byte little-endian length prefix + JSON body.
 
     ``default`` is forwarded to ``json.dumps`` to serialize non-native values.
     """
@@ -45,7 +47,7 @@ def encode_frame(msg: dict, default=None) -> bytes:
     return _LEN.pack(len(body)) + body
 
 
-def decode_frame(raw) -> dict:
+def decode_frame(raw: Union[bytes, str]) -> Dict[str, Any]:
     """Decode a single length-prefixed frame (where one message == one frame)."""
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
@@ -57,10 +59,10 @@ class _Slot:
     """Pending-request slot: an event plus the resolved result or error."""
     __slots__ = ("event", "result", "error")
 
-    def __init__(self):
-        self.event = anyio.Event()
+    def __init__(self) -> None:
+        self.event: anyio.Event = anyio.Event()
         self.result = None
-        self.error = None
+        self.error: Optional[Exception] = None
 
 
 class JsonRpcPeer:
@@ -70,20 +72,25 @@ class JsonRpcPeer:
     ``aclose()``.
     """
 
-    def __init__(self, stream, default=None, object_hook=None):
-        self._stream = stream
-        self._reader = BufferedByteReceiveStream(stream)
-        self._default = default
-        self._object_hook = object_hook
-        self._next_id = 1
-        self._pending = {}
-        self._closed = False
+    def __init__(
+        self,
+        stream: ByteStream,
+        default: Optional[Callable[[Any], Any]] = None,
+        object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    ):
+        self._stream: ByteStream = stream
+        self._reader: BufferedByteReceiveStream = BufferedByteReceiveStream(stream)
+        self._default: Optional[Callable[[Any], Any]] = default
+        self._object_hook: Optional[Callable[[Dict[str, Any]], Any]] = object_hook
+        self._next_id: int = 1
+        self._pending: Dict[int, _Slot] = {}
+        self._closed: bool = False
 
     @property
     def closed(self) -> bool:
         return self._closed
 
-    async def request(self, method: str, params: list) -> Any:
+    async def request(self, method: str, params: List[Any]):
         """Send a request and await its response."""
         if self._closed:
             raise ConnectionClosedError("Not connected")
@@ -100,7 +107,7 @@ class JsonRpcPeer:
             raise slot.error
         return slot.result
 
-    async def notify(self, method: str, params: list) -> None:
+    async def notify(self, method: str, params: List[Any]) -> None:
         """Send a fire-and-forget notification (no id)."""
         if self._closed:
             raise ConnectionClosedError("Not connected")
@@ -122,7 +129,7 @@ class JsonRpcPeer:
         finally:
             self._reject_all(ConnectionClosedError("Connection closed"))
 
-    def _dispatch(self, msg: dict) -> None:
+    def _dispatch(self, msg: Dict[str, Any]) -> None:
         msg_id = msg.get("id")
         if msg_id is None:
             return  # notification / server push: ignored (parity with prior behavior)
@@ -139,8 +146,8 @@ class JsonRpcPeer:
         slot.event.set()
 
     def _reject_all(self, error: Exception) -> None:
-        self._closed = True
         logger.debug("JsonRpcPeer._reject_all %s", error)
+        self._closed = True
         for slot in self._pending.values():
             if not slot.event.is_set():
                 slot.error = error
@@ -148,21 +155,21 @@ class JsonRpcPeer:
         self._pending.clear()
 
     async def aclose(self) -> None:
-        self._closed = True
         logger.debug("JsonRpcPeer.aclose")
+        self._closed = True
         await self._stream.aclose()
 
 
-class StdioByteStream:
+class StdioByteStream(ByteStream):
     """Byte stream over blocking stdin/stdout, read in a worker thread.
 
     Windows pipes do not support asyncio's connect_read_pipe, so reads use a
     blocking read offloaded to a thread (abandoned on cancel so close never hangs).
     """
 
-    def __init__(self, reader=None, writer=None):
-        self._in = reader if reader is not None else sys.stdin.buffer
-        self._out = writer if writer is not None else sys.stdout.buffer
+    def __init__(self, reader: Optional[BinaryIO] = None, writer: Optional[BinaryIO] = None):
+        self._in: BinaryIO = reader if reader is not None else sys.stdin.buffer
+        self._out: BinaryIO = writer if writer is not None else sys.stdout.buffer
 
     async def receive(self, max_bytes: int = 65536) -> bytes:
         data = await anyio.to_thread.run_sync(

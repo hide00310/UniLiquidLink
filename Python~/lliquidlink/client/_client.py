@@ -1,37 +1,18 @@
-"""Client: anyio runtime, RPC dispatch, object-release batching."""
+"""Client: anyio runtime and RPC dispatch."""
 from __future__ import annotations
-import functools
-import json
-import threading
-import weakref
-from typing import Any, List, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
-    from ._transports import StreamTransport
+    from ._interfaces import Transport
 
 import anyio
 
 from ._event import Event
 from ._proxy import ObjectProxy, PropertyProxy
+from ._release import ReleaseManager
 from ._serialization import Serialization
 
 import logging
 logger = logging.getLogger(__name__)
-
-async def _await(coro):
-    """Await a coroutine; used to run it on the event loop from a worker thread."""
-    return await coro
-
-
-def gc_flush(func):
-    """Decorator: flush pending Unity object releases after the method returns."""
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        finally:
-            self.flush_releases()
-    return wrapper
-
 
 class Client:
     """Client that connects to a Unity Editor server and sends RPC commands.
@@ -40,13 +21,12 @@ class Client:
     :meth:`mainloop`.
     """
 
-    def __init__(self, transport : StreamTransport):
-        self._transport = transport
-        self._serialization = Serialization(lambda data: ObjectProxy(self, data))
+    def __init__(self, transport: "Transport", verify_releases: bool = False):
+        self._transport: "Transport" = transport
+        self._serialization: Serialization = Serialization(lambda data: ObjectProxy(data, self._transport, self._release.track, self._make_property_proxy))
         transport.bind_codec(self._serialization)
-        self._pending_releases = set()
-        self._release_lock = threading.Lock()
-        self.on_execute = Event()
+        self._release: ReleaseManager = ReleaseManager(transport, verify=verify_releases)
+        self.on_execute: Event = Event()
 
     # ── RPC dispatch ─────────────────────────────────────────────────────────
 
@@ -54,46 +34,14 @@ class Client:
         """Treat any undefined non-underscore attribute as a Unity RPC method."""
         if name.startswith("_"):
             raise AttributeError(name)
-        return PropertyProxy(self, None, [name])
+        return self._make_property_proxy(None, [name])
 
-    async def _call_async(self, method: str, params: list) -> Any:
-        return await self._transport.rpc_call(method, params)
+    def _make_property_proxy(self, obj: Optional[Dict[str, Any]], chain: List[str]) -> PropertyProxy:
+        return PropertyProxy(obj, chain, self._transport, self._make_property_proxy)
 
-    def _call_sync(self, method: str, params: list) -> Any:
-        return self._run(self._call_async(method, params))
-
-    def _run(self, coro):
-        """Run a coroutine synchronously from a worker thread, else return it."""
-        try:
-            return anyio.from_thread.run(_await, coro)
-        except RuntimeError:
-            return coro
-
-    # ── Object release batching ──────────────────────────────────────────────
-
-    def _track_release(self, proxy, data: dict) -> None:
-        instance_id = data.get("instanceId")
-        if instance_id is None:
-            return
-        weakref.finalize(proxy, self._schedule_release, instance_id)
-
-    def _schedule_release(self, instance_id: int) -> None:
-        with self._release_lock:
-            self._pending_releases.add(instance_id)
-
-    async def _flush_releases(self) -> None:
-        with self._release_lock:
-            if not self._pending_releases:
-                return
-            ids = sorted(self._pending_releases)
-            self._pending_releases.clear()
-        if self._transport.closed:
-            return
-        # await self._transport.rpc_notify("release_objects", [json.dumps(ids)])
-
-    def flush_releases(self) -> None:
+    def flush_releases(self) -> Optional[List[int]]:
         """Send pending object releases now (callable from a worker thread)."""
-        self._run(self._flush_releases())
+        return self._release.flush()
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -109,7 +57,7 @@ class Client:
         await self._transport.open()
         try:
             await self.execute(self.on_execute)
-            await self._flush_releases()
+            await self._release.flush_async()
         finally:
             await self._transport.aclose()
 
@@ -121,7 +69,7 @@ class Client:
         """Close the connection to the Unity server."""
         await self._transport.aclose()
 
-    async def execute(self, on_execute) -> None:
+    async def execute(self, on_execute: Callable[["Client"], None]) -> None:
         """Run a callback in a worker thread with this client as its argument."""
         await anyio.to_thread.run_sync(on_execute, self)
 
@@ -129,10 +77,10 @@ class Client:
         """Register a class name whose methods can be called without namespace prefix."""
         if isinstance(class_names, str):
             class_names = [class_names]
-        self._call_sync("add_abbreviated_classes", [class_names])
+        self._transport.call_sync("add_abbreviated_classes", [class_names])
 
     def add_abbreviated_namespaces(self, namespaces: List[str]) -> None:
         """Register namespaces whose types can be referred to by simple name."""
         if isinstance(namespaces, str):
             namespaces = [namespaces]
-        self._call_sync("add_abbreviated_namespaces", [namespaces])
+        self._transport.call_sync("add_abbreviated_namespaces", [namespaces])

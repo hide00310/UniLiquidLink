@@ -7,15 +7,20 @@ subclass ServerTransport to plug in Unix sockets, etc.
 """
 from __future__ import annotations
 
+import abc
 import struct
+from typing import Awaitable, Callable, Optional
 
 import anyio
+import anyio.abc
 from anyio.streams.buffered import BufferedByteReceiveStream
+
+from ._interfaces import MessageStream
 
 import logging
 logger = logging.getLogger(__name__)
 
-_LEN = struct.Struct(">I")
+_LEN = struct.Struct("<I")
 
 # Stream-end conditions that terminate a connection's receive loop.
 _STREAM_END = (
@@ -26,19 +31,21 @@ _STREAM_END = (
 )
 
 
-class ServerTransport:
+class ServerTransport(abc.ABC):
     """Base transport: accepts external client connections and dispatches each to a handler."""
 
-    async def serve(self, handler) -> None:
+    @abc.abstractmethod
+    async def serve(self, handler: Callable[[MessageStream], Awaitable[None]]) -> None:
         """Start accepting connections, invoking handler(connection) for each. Runs until stop()."""
         raise NotImplementedError
 
+    @abc.abstractmethod
     async def stop(self) -> None:
         """Signal serve() to return."""
         raise NotImplementedError
 
 
-class _TcpConnection:
+class _TcpConnection(MessageStream):
     """Adapt an anyio SocketStream to the message-iterator interface `_handle_client` expects.
 
     Raw TCP has no message boundaries, so each iteration reads one 4-byte
@@ -46,11 +53,11 @@ class _TcpConnection:
     it whole for `decode_frame` to parse.
     """
 
-    def __init__(self, stream):
+    def __init__(self, stream: anyio.abc.SocketStream):
         self._stream = stream
-        self._reader = BufferedByteReceiveStream(stream)
+        self._reader: BufferedByteReceiveStream = BufferedByteReceiveStream(stream)
 
-    def __aiter__(self):
+    def __aiter__(self) -> "_TcpConnection":
         return self
 
     async def __anext__(self) -> bytes:
@@ -72,16 +79,20 @@ class TcpServerTransport(ServerTransport):
     """Default ServerTransport: a raw TCP listener, one connection per client."""
 
     def __init__(self, host: str = "localhost", port: int = 8700):
-        self._host = host
-        self._port = port
-        self._stop_event = None
+        self._host: str = host
+        self._port: int = port
+        self._stop_event: Optional[anyio.Event] = None
 
-    async def serve(self, handler) -> None:
+    async def serve(self, handler: Callable[[MessageStream], Awaitable[None]]) -> None:
         self._stop_event = anyio.Event()
         logger.info("serve %s:%d", self._host, self._port)
 
-        async def _on_connect(stream):
-            await handler(_TcpConnection(stream))
+        async def _on_connect(stream: anyio.abc.SocketStream) -> None:
+            connection = _TcpConnection(stream)
+            try:
+                await handler(connection)
+            finally:
+                await connection.aclose()
 
         listener = await anyio.create_tcp_listener(local_host=self._host, local_port=self._port)
         async with listener:

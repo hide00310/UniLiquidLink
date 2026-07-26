@@ -10,11 +10,12 @@ Usage::
     client.on_execute += on_execute
     client.mainloop()
 """
+from __future__ import annotations
 import logging
 
 logger = logging.getLogger(__name__)
 
-def setup_logger():
+def setup_logger() -> None:
     level = logging.INFO
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("[Client] %(message)s"))
@@ -32,9 +33,11 @@ def setup_logger():
         _logger.setLevel(logger.level)
 setup_logger()
 
-from ._client import Client, gc_flush
+from ._client import Client
 from ._event import Event
+from ._interfaces import Transport
 from ._proxy import ObjectProxy, PropertyProxy
+from ._release import gc_flush
 from ._transports import StdioJsonRpcTransport, TcpJsonRpcTransport
 from ..core import ConnectionClosedError, RpcError
 from . import models
@@ -47,6 +50,7 @@ __all__ = [
     "PropertyProxy",
     "StdioJsonRpcTransport",
     "TcpJsonRpcTransport",
+    "Transport",
     "ConnectionClosedError",
     "RpcError",
     "models",

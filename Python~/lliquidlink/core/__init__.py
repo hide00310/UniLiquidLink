@@ -1,6 +1,7 @@
 """Role-agnostic JSON-RPC core shared by lliquidlink.client and lliquidlink.server."""
 from __future__ import annotations
 
+from ._interfaces import ByteStream
 from ._rpc import (
     JsonRpcPeer,
     StdioByteStream,
@@ -11,6 +12,7 @@ from ._rpc import (
 )
 
 __all__ = [
+    "ByteStream",
     "JsonRpcPeer",
     "StdioByteStream",
     "ConnectionClosedError",

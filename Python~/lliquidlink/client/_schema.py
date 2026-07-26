@@ -25,16 +25,24 @@ class RpcChainStep:
 
 
 @dataclass
-class ReleaseRequest:
-    """Batch request to release Unity object references held by the server."""
-
-    data_list: list[dict]
-    action: Literal['release_objects'] = 'release_objects'
-
-
-@dataclass
 class RpcEnum:
-    """Represents a .NET Type reference transmitted as a JSON-RPC parameter."""
+    """Represents a .NET enum reference transmitted as a JSON-RPC parameter."""
 
     value: str
     rpcEnum: int = 1
+
+
+@dataclass
+class RpcResolveChainParam:
+    obj: Any
+    steps: list[RpcChainStep]
+    method: str
+    args: list[Any]
+
+
+@dataclass
+class RpcResolveChainSetParam:
+    obj: Any
+    steps: list[RpcChainStep]
+    property: str
+    value: Any
