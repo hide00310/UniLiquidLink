@@ -9,11 +9,11 @@ class Event:
     def __init__(self) -> None:
         self._handlers: List[Callable[..., None]] = []
 
-    def __iadd__(self, handler: Callable[..., None]) -> "Event":
+    def __iadd__(self, handler: Callable[..., None]) -> Event:
         self._handlers.append(handler)
         return self
 
-    def __isub__(self, handler: Callable[..., None]) -> "Event":
+    def __isub__(self, handler: Callable[..., None]) -> Event:
         try:
             self._handlers.remove(handler)
         except ValueError:

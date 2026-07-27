@@ -9,7 +9,7 @@ class MessageStream(Protocol):
     Satisfied structurally by `_TcpConnection` and test doubles (e.g. FakeWebSocket).
     """
 
-    def __aiter__(self) -> "MessageStream":
+    def __aiter__(self) -> MessageStream:
         ...
 
     async def __anext__(self) -> bytes:

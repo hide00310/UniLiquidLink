@@ -57,7 +57,7 @@ class _TcpConnection(MessageStream):
         self._stream = stream
         self._reader: BufferedByteReceiveStream = BufferedByteReceiveStream(stream)
 
-    def __aiter__(self) -> "_TcpConnection":
+    def __aiter__(self) -> _TcpConnection:
         return self
 
     async def __anext__(self) -> bytes:

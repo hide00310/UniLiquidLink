@@ -16,8 +16,8 @@ class ReleaseManager:
     actually removed (used by integration tests to confirm the round trip).
     """
 
-    def __init__(self, transport: "Transport", verify: bool = False):
-        self._transport: "Transport" = transport
+    def __init__(self, transport: Transport, verify: bool = False):
+        self._transport: Transport = transport
         self._verify: bool = verify
         self._pending_releases: Set[int] = set()
         self._release_lock: threading.Lock = threading.Lock()

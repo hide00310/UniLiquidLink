@@ -12,7 +12,7 @@ class Transport(Protocol):
     only need to match this shape, not inherit from it.
     """
 
-    def bind_codec(self, serialization: "Serialization") -> None:
+    def bind_codec(self, serialization: Serialization) -> None:
         ...
 
     async def open(self) -> None:

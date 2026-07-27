@@ -26,22 +26,22 @@ class ObjectProxy(SupportsAsDict):
     """
 
     data: Dict[str, Any]
-    _transport: "Transport"
-    _make_property_proxy: Callable[[Dict[str, Any], List[str]], "PropertyProxy"]
+    _transport: Transport
+    _make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy]
 
     def __init__(
         self,
         data: Dict[str, Any],
-        transport: "Transport",
-        track: Callable[["ObjectProxy", Dict[str, Any]], None],
-        make_property_proxy: Callable[[Dict[str, Any], List[str]], "PropertyProxy"],
+        transport: Transport,
+        track: Callable[[ObjectProxy, Dict[str, Any]], None],
+        make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy],
     ):
         object.__setattr__(self, "data", data)
         object.__setattr__(self, "_transport", transport)
         object.__setattr__(self, "_make_property_proxy", make_property_proxy)
         track(self, data)
 
-    def __getattr__(self, name: str) -> "PropertyProxy":
+    def __getattr__(self, name: str) -> PropertyProxy:
         if name.startswith("_"):
             raise AttributeError(name)
         return self._make_property_proxy(self.data, [name])
@@ -75,22 +75,22 @@ class PropertyProxy:
 
     _obj: Optional[Dict[str, Any]]
     _chain: List[str]
-    _transport: "Transport"
-    _make_property_proxy: Callable[[Dict[str, Any], List[str]], "PropertyProxy"]
+    _transport: Transport
+    _make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy]
 
     def __init__(
         self,
         obj: Optional[Dict[str, Any]],
         chain: List[str],
-        transport: "Transport",
-        make_property_proxy: Callable[[Dict[str, Any], List[str]], "PropertyProxy"],
+        transport: Transport,
+        make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy],
     ):
         object.__setattr__(self, "_obj", obj)
         object.__setattr__(self, "_chain", chain)
         object.__setattr__(self, "_transport", transport)
         object.__setattr__(self, "_make_property_proxy", make_property_proxy)
 
-    def __getattr__(self, name: str) -> "PropertyProxy":
+    def __getattr__(self, name: str) -> PropertyProxy:
         if name.startswith("_"):
             raise AttributeError(name)
         return self._make_property_proxy(self._obj, self._chain + [name])

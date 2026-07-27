@@ -21,8 +21,8 @@ class Client:
     :meth:`mainloop`.
     """
 
-    def __init__(self, transport: "Transport", verify_releases: bool = False):
-        self._transport: "Transport" = transport
+    def __init__(self, transport: Transport, verify_releases: bool = False):
+        self._transport: Transport = transport
         self._serialization: Serialization = Serialization(lambda data: ObjectProxy(data, self._transport, self._release.track, self._make_property_proxy))
         transport.bind_codec(self._serialization)
         self._release: ReleaseManager = ReleaseManager(transport, verify=verify_releases)
@@ -69,7 +69,7 @@ class Client:
         """Close the connection to the Unity server."""
         await self._transport.aclose()
 
-    async def execute(self, on_execute: Callable[["Client"], None]) -> None:
+    async def execute(self, on_execute: Callable[[Client], None]) -> None:
         """Run a callback in a worker thread with this client as its argument."""
         await anyio.to_thread.run_sync(on_execute, self)
 
