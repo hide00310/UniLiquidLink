@@ -612,7 +612,7 @@ __pycache__/
 /dist/
 *.egg-info/
 
-Data/
+Data~/
 *.html
 __pycache__.meta
 

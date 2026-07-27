@@ -101,9 +101,9 @@ namespace UniLiquidLink
             if (_transport is StdioTransport)
             {
                 string workDir = WorkingDirectory ?? GetRootLibDirectory();
-                Rpc.SaveRpcNamesCsv(Path.Combine(ServerDir, "Data/rpc_names.csv"));
-                _typeResolver.SaveAllowedTypesCsv(Path.Combine(ServerDir, "Data/type_names.csv"));
-                _pythonProcessManager = new PythonProcessManager(() => Logger, _pythonServerStartCommand, workDir, ServerDir + "/Data");
+                Rpc.SaveRpcNamesCsv(Path.Combine(ServerDir, "Data~/rpc_names.csv"));
+                _typeResolver.SaveAllowedTypesCsv(Path.Combine(ServerDir, "Data~/type_names.csv"));
+                _pythonProcessManager = new PythonProcessManager(() => Logger, _pythonServerStartCommand, workDir, ServerDir + "/Data~");
                 Process p = _pythonProcessManager.Start();
                 ((StdioTransport)_transport).AttachStreams(p.StandardOutput.BaseStream, p.StandardInput.BaseStream, p.StandardError.BaseStream);
             }
