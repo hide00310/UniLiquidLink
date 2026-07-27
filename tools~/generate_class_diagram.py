@@ -26,9 +26,7 @@ OUT_FILE = os.path.join(WEBSOCKETLIB, "Docs~", "ClassDiagram.md")
 HTML_FILE = os.path.join(WEBSOCKETLIB, "Docs~", "ClassDiagram.html")
 
 PACKAGES = [
-    os.path.join("Python~", "lliquidlink", "core"),
-    os.path.join("Python~", "lliquidlink", "client"),
-    os.path.join("Python~", "lliquidlink", "server"),
+    os.path.join("Python~", "lliquidlink"),
 ]
 
 _REL_RE = re.compile(
@@ -166,6 +164,7 @@ def _inject_skinparam(puml):
         else:
             break
     # lines.insert(insert_at, "skinparam linetype ortho")
+    lines.insert(insert_at, "hide members")
     return "\n".join(lines)
 
 def drop_classes(class_blocks, relations):
@@ -287,6 +286,7 @@ def run_pyreverse(package_name):
 
     if classes_puml:
         classes_puml = sort_plantuml(classes_puml)
+        classes_puml = _inject_skinparam(classes_puml)
 
     if packages_puml:
         packages_puml = _inject_skinparam(packages_puml)

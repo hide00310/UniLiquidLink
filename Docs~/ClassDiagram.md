@@ -1,56 +1,13 @@
 # Class Diagrams
 
-## Python~\lliquidlink\core
+## Python~\lliquidlink
 
 ### Classes
 
 ```plantuml
-@startuml classes_Python~_lliquidlink_core
+@startuml classes_Python~_lliquidlink
 set namespaceSeparator none
-
-class "_Slot" as lliquidlink.core._rpc._Slot {
-}
-class "JsonRpcPeer" as lliquidlink.core._rpc.JsonRpcPeer {
-}
-class "ByteStream" as lliquidlink.core._interfaces.ByteStream {
-}
-class "StdioByteStream" as lliquidlink.core._rpc.StdioByteStream {
-}
-class "<color:red>ConnectionClosedError</color>" as lliquidlink.core._rpc.ConnectionClosedError {
-}
-class "<color:red>RpcError</color>" as lliquidlink.core._rpc.RpcError {
-}
-
-lliquidlink.core._rpc.StdioByteStream --|> lliquidlink.core._interfaces.ByteStream
-lliquidlink.core._rpc.JsonRpcPeer o-- lliquidlink.core._interfaces.ByteStream : _stream
-lliquidlink.core._rpc.JsonRpcPeer --> lliquidlink.core._rpc._Slot : _pending
-@enduml
-```
-
-### Packages
-
-```plantuml
-@startuml packages_Python~_lliquidlink_core
-set namespaceSeparator none
-package "lliquidlink.core" as lliquidlink.core {
-}
-package "lliquidlink.core._interfaces" as lliquidlink.core._interfaces {
-}
-package "lliquidlink.core._rpc" as lliquidlink.core._rpc {
-}
-lliquidlink.core --> lliquidlink.core._interfaces
-lliquidlink.core --> lliquidlink.core._rpc
-lliquidlink.core._rpc --> lliquidlink.core._interfaces
-@enduml
-```
-
-## Python~\lliquidlink\client
-
-### Classes
-
-```plantuml
-@startuml classes_Python~_lliquidlink_client
-set namespaceSeparator none
+hide members
 
 class "Client" as lliquidlink.client._client.Client {
 }
@@ -68,6 +25,32 @@ class "Serialization" as lliquidlink.client._serialization.Serialization {
 }
 class "StreamTransport" as lliquidlink.client._transports.StreamTransport {
 }
+class "_Slot" as lliquidlink.core._rpc._Slot {
+}
+class "MessageStream" as lliquidlink.server._interfaces.MessageStream {
+}
+class "RpcBridge" as lliquidlink.server._interfaces.RpcBridge {
+}
+class "_TcpConnection" as lliquidlink.server._transport._TcpConnection {
+}
+class "IpcBridge" as lliquidlink.server.ipc_bridge.IpcBridge {
+}
+class "JsonRpcPeer" as lliquidlink.core._rpc.JsonRpcPeer {
+}
+class "ByteStream" as lliquidlink.core._interfaces.ByteStream {
+}
+class "StdioByteStream" as lliquidlink.core._rpc.StdioByteStream {
+}
+class "RpcNameResolver" as lliquidlink.server.resolver.RpcNameResolver {
+}
+class "TypeNameResolver" as lliquidlink.server.resolver.TypeNameResolver {
+}
+class "Server" as lliquidlink.server.server.Server {
+}
+class "ServerTransport" as lliquidlink.server._transport.ServerTransport {
+}
+class "TcpServerTransport" as lliquidlink.server._transport.TcpServerTransport {
+}
 class "PropertyProxy" as lliquidlink.client._proxy.PropertyProxy {
 }
 class "RpcChainStep" as lliquidlink.client._schema.RpcChainStep {
@@ -80,20 +63,39 @@ class "RpcResolveChainSetParam" as lliquidlink.client._schema.RpcResolveChainSet
 }
 class "RpcType" as lliquidlink.client._schema.RpcType {
 }
+class "<color:red>ConnectionClosedError</color>" as lliquidlink.core._rpc.ConnectionClosedError {
+}
+class "<color:red>RpcError</color>" as lliquidlink.core._rpc.RpcError {
+}
 
 lliquidlink.client._proxy.ObjectProxy --|> lliquidlink.client._interfaces.SupportsAsDict
 lliquidlink.client._transports.StreamTransport --|> lliquidlink.client._interfaces.Transport
+lliquidlink.server._transport._TcpConnection --|> lliquidlink.server._interfaces.MessageStream
+lliquidlink.server.ipc_bridge.IpcBridge --|> lliquidlink.server._interfaces.RpcBridge
+lliquidlink.core._rpc.StdioByteStream --|> lliquidlink.core._interfaces.ByteStream
+lliquidlink.server._transport.TcpServerTransport --|> lliquidlink.server._transport.ServerTransport
 lliquidlink.client._client.Client *-- lliquidlink.client._event.Event : on_execute
 lliquidlink.client._client.Client *-- lliquidlink.client._release.ReleaseManager : _release
 lliquidlink.client._client.Client *-- lliquidlink.client._serialization.Serialization : _serialization
+lliquidlink.client._transports.StreamTransport *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
+lliquidlink.server.ipc_bridge.IpcBridge *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
+lliquidlink.core._rpc.JsonRpcPeer o-- lliquidlink.core._interfaces.ByteStream : _stream
+lliquidlink.server.server.Server o-- lliquidlink.server._transport.ServerTransport : _transport
+lliquidlink.core._rpc.JsonRpcPeer --> lliquidlink.core._rpc._Slot : _pending
+lliquidlink.server.server.Server --> lliquidlink.server.ipc_bridge.IpcBridge : _bridge
+lliquidlink.server.server.Server --> lliquidlink.server.resolver.RpcNameResolver : _resolver
+lliquidlink.server.server.Server --> lliquidlink.server.resolver.TypeNameResolver : _type_resolver
 @enduml
 ```
 
 ### Packages
 
 ```plantuml
-@startuml packages_Python~_lliquidlink_client
+@startuml packages_Python~_lliquidlink
 set namespaceSeparator none
+hide members
+package "lliquidlink" as lliquidlink {
+}
 package "lliquidlink.client" as lliquidlink.client {
 }
 package "lliquidlink.client._client" as lliquidlink.client._client {
@@ -114,69 +116,12 @@ package "lliquidlink.client._transports" as lliquidlink.client._transports {
 }
 package "lliquidlink.client.models" as lliquidlink.client.models {
 }
-lliquidlink.client --> lliquidlink.client._client
-lliquidlink.client --> lliquidlink.client._event
-lliquidlink.client --> lliquidlink.client._interfaces
-lliquidlink.client --> lliquidlink.client._proxy
-lliquidlink.client --> lliquidlink.client._release
-lliquidlink.client --> lliquidlink.client._transports
-lliquidlink.client._client --> lliquidlink.client._event
-lliquidlink.client._client --> lliquidlink.client._proxy
-lliquidlink.client._client --> lliquidlink.client._release
-lliquidlink.client._client --> lliquidlink.client._serialization
-lliquidlink.client._proxy --> lliquidlink.client._interfaces
-lliquidlink.client._proxy --> lliquidlink.client.models
-lliquidlink.client._transports --> lliquidlink.client._interfaces
-lliquidlink.client.models --> lliquidlink.client._schema
-lliquidlink.client._client ..> lliquidlink.client._interfaces
-lliquidlink.client._interfaces ..> lliquidlink.client._serialization
-lliquidlink.client._release ..> lliquidlink.client._interfaces
-lliquidlink.client._transports ..> lliquidlink.client._serialization
-@enduml
-```
-
-## Python~\lliquidlink\server
-
-### Classes
-
-```plantuml
-@startuml classes_Python~_lliquidlink_server
-set namespaceSeparator none
-
-class "MessageStream" as lliquidlink.server._interfaces.MessageStream {
+package "lliquidlink.core" as lliquidlink.core {
 }
-class "RpcBridge" as lliquidlink.server._interfaces.RpcBridge {
+package "lliquidlink.core._interfaces" as lliquidlink.core._interfaces {
 }
-class "_TcpConnection" as lliquidlink.server._transport._TcpConnection {
+package "lliquidlink.core._rpc" as lliquidlink.core._rpc {
 }
-class "IpcBridge" as lliquidlink.server.ipc_bridge.IpcBridge {
-}
-class "RpcNameResolver" as lliquidlink.server.resolver.RpcNameResolver {
-}
-class "TypeNameResolver" as lliquidlink.server.resolver.TypeNameResolver {
-}
-class "Server" as lliquidlink.server.server.Server {
-}
-class "ServerTransport" as lliquidlink.server._transport.ServerTransport {
-}
-class "TcpServerTransport" as lliquidlink.server._transport.TcpServerTransport {
-}
-
-lliquidlink.server._transport._TcpConnection --|> lliquidlink.server._interfaces.MessageStream
-lliquidlink.server.ipc_bridge.IpcBridge --|> lliquidlink.server._interfaces.RpcBridge
-lliquidlink.server._transport.TcpServerTransport --|> lliquidlink.server._transport.ServerTransport
-lliquidlink.server.server.Server o-- lliquidlink.server._transport.ServerTransport : _transport
-lliquidlink.server.server.Server --> lliquidlink.server.ipc_bridge.IpcBridge : _bridge
-lliquidlink.server.server.Server --> lliquidlink.server.resolver.RpcNameResolver : _resolver
-lliquidlink.server.server.Server --> lliquidlink.server.resolver.TypeNameResolver : _type_resolver
-@enduml
-```
-
-### Packages
-
-```plantuml
-@startuml packages_Python~_lliquidlink_server
-set namespaceSeparator none
 package "lliquidlink.server" as lliquidlink.server {
 }
 package "lliquidlink.server.__main__" as lliquidlink.server.__main__ {
@@ -191,7 +136,25 @@ package "lliquidlink.server.resolver" as lliquidlink.server.resolver {
 }
 package "lliquidlink.server.server" as lliquidlink.server.server {
 }
-lliquidlink.server --> lliquidlink.server
+lliquidlink.client --> lliquidlink.client._client
+lliquidlink.client --> lliquidlink.client._event
+lliquidlink.client --> lliquidlink.client._interfaces
+lliquidlink.client --> lliquidlink.client._proxy
+lliquidlink.client --> lliquidlink.client._release
+lliquidlink.client --> lliquidlink.client._transports
+lliquidlink.client --> lliquidlink.core
+lliquidlink.client._client --> lliquidlink.client._event
+lliquidlink.client._client --> lliquidlink.client._proxy
+lliquidlink.client._client --> lliquidlink.client._release
+lliquidlink.client._client --> lliquidlink.client._serialization
+lliquidlink.client._proxy --> lliquidlink.client._interfaces
+lliquidlink.client._proxy --> lliquidlink.client.models
+lliquidlink.client._transports --> lliquidlink.client._interfaces
+lliquidlink.client.models --> lliquidlink.client._schema
+lliquidlink.core --> lliquidlink.core._interfaces
+lliquidlink.core --> lliquidlink.core._rpc
+lliquidlink.core._rpc --> lliquidlink.core._interfaces
+lliquidlink.server --> lliquidlink.server.server
 lliquidlink.server.__main__ --> lliquidlink.server.server
 lliquidlink.server._transport --> lliquidlink.server._interfaces
 lliquidlink.server.ipc_bridge --> lliquidlink.server._interfaces
@@ -199,6 +162,10 @@ lliquidlink.server.server --> lliquidlink.server._interfaces
 lliquidlink.server.server --> lliquidlink.server._transport
 lliquidlink.server.server --> lliquidlink.server.ipc_bridge
 lliquidlink.server.server --> lliquidlink.server.resolver
+lliquidlink.client._client ..> lliquidlink.client._interfaces
+lliquidlink.client._interfaces ..> lliquidlink.client._serialization
+lliquidlink.client._release ..> lliquidlink.client._interfaces
+lliquidlink.client._transports ..> lliquidlink.client._serialization
 @enduml
 ```
 
