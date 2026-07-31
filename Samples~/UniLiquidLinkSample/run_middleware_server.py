@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 
 from lliquidlink.server.server import Server
 from lliquidlink.server._transport import TcpServerTransport
+import lliquidlink.server
+import logging
 
 # Must match the TcpJsonRpcTransport host/port used by create_and_rotate_cube.py /
 # all_features_tour.py. Cube Demo and All Features Tour share this port, so only one
@@ -28,6 +30,8 @@ from lliquidlink.server._transport import TcpServerTransport
 HOST = "localhost"
 PORT = 8700
 
+logger = logging.getLogger(lliquidlink.server.__name__)
+logger.setLevel(logging.DEBUG)
 
 def main():
     # PythonProcessManager (C# side) always appends "-dataDir <path>", pointing at the
