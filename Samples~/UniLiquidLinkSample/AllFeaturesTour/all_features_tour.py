@@ -104,10 +104,13 @@ def on_execute(client):
     # call returns.
     gc.collect()
 
-if __name__ == "__main__":
+def main():
     client = Client(TcpJsonRpcTransport("localhost", 8700))
     client.on_execute += on_execute
 
     print("Connecting to Unity server...")
     client.mainloop()
     print("\nAll features tour complete.")
+
+if __name__ == "__main__":
+    main()
