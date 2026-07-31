@@ -73,7 +73,7 @@ Bidirectional byte stream: anything with async send/receive/aclose.
 Client that connects to a Unity Editor server and sends RPC commands.
 
 ### Constructors
-- `__init__(transport: 'Transport', verify_releases: bool=False)`
+- `__init__(transport: Transport, verify_releases: bool=False)`
 
 ### Properties
 - `is_running`
@@ -84,7 +84,7 @@ Client that connects to a Unity Editor server and sends RPC commands.
 - `mainloop()` — Connect, run on_execute in a worker thread, flush, then disconnect.
 - `connect()` — Open the connection to the Unity server.
 - `disconnect()` — Close the connection to the Unity server.
-- `execute(on_execute: Callable[['Client'], None])` — Run a callback in a worker thread with this client as its argument.
+- `execute(on_execute: Callable[[Client], None])` — Run a callback in a worker thread with this client as its argument.
 - `add_abbreviated_classes(class_names: List[str])` — Register a class name whose methods can be called without namespace prefix.
 - `add_abbreviated_namespaces(namespaces: List[str])` — Register namespaces whose types can be referred to by simple name.
 
@@ -96,7 +96,7 @@ Client that connects to a Unity Editor server and sends RPC commands.
 Proxy for a live Unity object; attribute access builds RPC chains.
 
 ### Constructors
-- `__init__(data: Dict[str, Any], transport: 'Transport', track: Callable[['ObjectProxy', Dict[str, Any]], None], make_property_proxy: Callable[[Dict[str, Any], List[str]], 'PropertyProxy'])`
+- `__init__(data: Dict[str, Any], transport: Transport, track: Callable[[ObjectProxy, Dict[str, Any]], None], make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy])`
 
 ### Methods
 - `__getattr__(name: str)`
@@ -111,7 +111,7 @@ Proxy for a live Unity object; attribute access builds RPC chains.
 Accumulates a property/method chain, resolved server-side when called.
 
 ### Constructors
-- `__init__(obj: Optional[Dict[str, Any]], chain: List[str], transport: 'Transport', make_property_proxy: Callable[[Dict[str, Any], List[str]], 'PropertyProxy'])`
+- `__init__(obj: Optional[Dict[str, Any]], chain: List[str], transport: Transport, make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy])`
 
 ### Methods
 - `__getattr__(name: str)`
@@ -194,7 +194,7 @@ RPC transport shape used by Client/ObjectProxy/PropertyProxy/ReleaseManager.
 - `closed`
 
 ### Methods
-- `bind_codec(serialization: 'Serialization')`
+- `bind_codec(serialization: Serialization)`
 - `open()`
 - `aclose()`
 - `rpc_call(method: str, params: List[Any])`
@@ -217,7 +217,7 @@ Anything exposing `_asdict()` for wire encoding (e.g. ObjectProxy).
 Tracks GC'd ObjectProxy instances and batches their release over RPC.
 
 ### Constructors
-- `__init__(transport: 'Transport', verify: bool=False)`
+- `__init__(transport: Transport, verify: bool=False)`
 
 ### Methods
 - `track(proxy, data: Dict[str, Any])` — Schedule a release when `proxy` is garbage-collected.

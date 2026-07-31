@@ -15,11 +15,13 @@ class "Event" as lliquidlink.client._event.Event {
 }
 class "SupportsAsDict" as lliquidlink.client._interfaces.SupportsAsDict {
 }
+class "ReleaseManager" as lliquidlink.client._release.ReleaseManager {
+}
 class "Transport" as lliquidlink.client._interfaces.Transport {
 }
 class "ObjectProxy" as lliquidlink.client._proxy.ObjectProxy {
 }
-class "ReleaseManager" as lliquidlink.client._release.ReleaseManager {
+class "PropertyProxy" as lliquidlink.client._proxy.PropertyProxy {
 }
 class "Serialization" as lliquidlink.client._serialization.Serialization {
 }
@@ -51,8 +53,6 @@ class "ServerTransport" as lliquidlink.server._transport.ServerTransport {
 }
 class "TcpServerTransport" as lliquidlink.server._transport.TcpServerTransport {
 }
-class "PropertyProxy" as lliquidlink.client._proxy.PropertyProxy {
-}
 class "RpcChainStep" as lliquidlink.client._schema.RpcChainStep {
 }
 class "RpcEnum" as lliquidlink.client._schema.RpcEnum {
@@ -79,8 +79,12 @@ lliquidlink.client._client.Client *-- lliquidlink.client._release.ReleaseManager
 lliquidlink.client._client.Client *-- lliquidlink.client._serialization.Serialization : _serialization
 lliquidlink.client._transports.StreamTransport *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
 lliquidlink.server.ipc_bridge.IpcBridge *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
+lliquidlink.client._client.Client o-- lliquidlink.client._interfaces.Transport : _transport
+lliquidlink.client._release.ReleaseManager o-- lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.core._rpc.JsonRpcPeer o-- lliquidlink.core._interfaces.ByteStream : _stream
 lliquidlink.server.server.Server o-- lliquidlink.server._transport.ServerTransport : _transport
+lliquidlink.client._proxy.ObjectProxy --> lliquidlink.client._interfaces.Transport : _transport
+lliquidlink.client._proxy.PropertyProxy --> lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.core._rpc.JsonRpcPeer --> lliquidlink.core._rpc._Slot : _pending
 lliquidlink.server.server.Server --> lliquidlink.server.ipc_bridge.IpcBridge : _bridge
 lliquidlink.server.server.Server --> lliquidlink.server.resolver.RpcNameResolver : _resolver
