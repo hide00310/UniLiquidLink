@@ -13,5 +13,11 @@ namespace LLiquidLink
         {
             return string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path);
         }
+
+        /// <summary>Resolve the absolute path of the Data~ directory next to serverDir.</summary>
+        public static string ResolveDataDir(string serverDir)
+        {
+            return Path.GetFullPath(Path.Combine(serverDir, "Data~"));
+        }
     }
 }
