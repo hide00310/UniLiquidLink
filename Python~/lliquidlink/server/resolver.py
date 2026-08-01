@@ -25,7 +25,7 @@ class RpcNameResolver:
             self._lookup = pd.read_csv(path, encoding="utf-8").set_index(["class_name", "method_name"])
             logger.info("Loaded %d RPC name entries from %s", len(self._lookup), path)
         except FileNotFoundError:
-            logger.warning("RPC names CSV not found at %s; abbreviated class resolution disabled", path)
+            logger.error("RPC names CSV not found at %s; abbreviated class resolution disabled", path)
 
     def add_abbreviated_classes(self, class_names: Union[str, List[str]]) -> None:
         """Register a class whose unqualified method names are resolved to full RPC names."""
@@ -168,7 +168,7 @@ class TypeNameResolver:
             self._loaded = True
             logger.info("Loaded %d type names from %s", len(self._by_full_name_lower), path)
         except FileNotFoundError:
-            logger.warning("Type names CSV not found at %s; type name resolution disabled", path)
+            logger.error("Type names CSV not found at %s; type name resolution disabled", path)
 
     def add_abbreviated_namespaces(self, namespaces: Union[str, List[str]]) -> None:
         """Register namespaces whose types can be referred to by simple name."""

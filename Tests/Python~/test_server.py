@@ -61,6 +61,13 @@ def _resolver():
     return RpcNameResolver("__nonexistent__")
 
 
+def test_rpc_name_resolver_missing_csv_logs_error(caplog):
+    with caplog.at_level("ERROR", logger="lliquidlink.server.resolver"):
+        RpcNameResolver("__nonexistent__")
+    assert any(rec.levelname == "ERROR" and "RPC names CSV not found" in rec.message
+               for rec in caplog.records)
+
+
 def _resolver_with_entries(entries: dict) -> RpcNameResolver:
     """Build RpcNameResolver pre-populated with {(class_name, method_name): full_name}."""
     import pandas as pd
@@ -212,6 +219,13 @@ def _type_resolver_with(full_names):
 def test_type_name_resolver_not_loaded():
     r = TypeNameResolver("__nonexistent__")
     assert r.resolve("Material") == "Material"
+
+
+def test_type_name_resolver_missing_csv_logs_error(caplog):
+    with caplog.at_level("ERROR", logger="lliquidlink.server.resolver"):
+        TypeNameResolver("__nonexistent__")
+    assert any(rec.levelname == "ERROR" and "Type names CSV not found" in rec.message
+               for rec in caplog.records)
 
 
 def test_type_name_resolver_exact_match():
