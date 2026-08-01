@@ -8,13 +8,12 @@ Prerequisites:
 import sys
 import os
 
+import logging
+logger = logging.getLogger("lliquidlink")
+logger.setLevel(logging.DEBUG)
+
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
-import lliquidlink.client
-import logging
-
-logger = logging.getLogger(lliquidlink.client.__name__)
-logger.setLevel(logging.DEBUG)
 
 def on_execute(client):
     # Create a new Cube primitive in the scene
