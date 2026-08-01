@@ -16,6 +16,11 @@ from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
 
 def on_execute(client):
+    # Register abbreviated class names so server-side methods can be called without
+    # their full declaring-type prefix (e.g. client.Find(...) instead of
+    # client.AllFeaturesTourServer.Find(...)).
+    client.add_abbreviated_classes(["GameObject", "AssetDatabase"])
+
     # Create a new Cube primitive in the scene
     cube = client.GameObject.CreatePrimitive(enum("Cube"))
     print(f"Created cube: {cube}")
