@@ -11,7 +11,12 @@ import gc
 
 from lliquidlink.client import Client, TcpJsonRpcTransport, RpcError, gc_flush
 from lliquidlink.client.models import type_, enum
+import lliquidlink.client
 
+import logging
+
+logger = logging.getLogger(lliquidlink.client.__name__)
+logger.setLevel(logging.DEBUG)
 
 DEMO_OBJECT = "AllFeaturesTourObject"
 DEMO_ASSET  = "Assets/AllFeaturesTourSample.mat"
