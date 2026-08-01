@@ -16,7 +16,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 def setup_logger() -> None:
-    level = logging.INFO
+    from ..core._logging import resolve_configured_level
+    level = resolve_configured_level(logger, default=logging.INFO)
     h = logging.StreamHandler()
     h.setFormatter(logging.Formatter("[Client] %(message)s"))
     h.setLevel(level)
