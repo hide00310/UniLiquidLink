@@ -95,7 +95,7 @@ Wraps an IEnumerable so its elements are rendered in log output instead of the a
 - `__init__(IEnumerable)` — Initialize the formatter with the collection to render.
 
 ### Methods
-- `ToString` — Render the collection as `[item1, item2, ...]`, using `"null"` for null elements.
+- `ToString` — Render the collection as `[item1, item2, ...]`, using `"null"` for null elements. Returns `"null"` if the collection itself is null.
 
 ---
 
@@ -144,6 +144,8 @@ Small filesystem/reflection helpers shared across the core library.
 
 ### Methods
 - `GetCurrentDirectory(string)` — Return the directory containing the caller's source file (via CallerFilePathAttribute).
+- `ResolveDataDir(string)` — Resolve the absolute path of the Data~ directory next to serverDir.
+- `UnwrapTargetInvocation(Exception)` — Unwrap reflection's TargetInvocationException to expose the actual thrown exception.
 
 ---
 

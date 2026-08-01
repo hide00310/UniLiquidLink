@@ -67,6 +67,12 @@ Bidirectional byte stream: anything with async send/receive/aclose.
 
 ---
 
+## Functions (lliquidlink.core._logging)
+
+- `resolve_configured_level(logger: logging.Logger, default: int)` — Return the nearest explicit (non-NOTSET) level already configured on
+
+---
+
 ## Client
 *Module: lliquidlink.client._client*
 

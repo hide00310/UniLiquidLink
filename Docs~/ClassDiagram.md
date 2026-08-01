@@ -124,6 +124,8 @@ package "lliquidlink.core" as lliquidlink.core {
 }
 package "lliquidlink.core._interfaces" as lliquidlink.core._interfaces {
 }
+package "lliquidlink.core._logging" as lliquidlink.core._logging {
+}
 package "lliquidlink.core._rpc" as lliquidlink.core._rpc {
 }
 package "lliquidlink.server" as lliquidlink.server {
@@ -147,6 +149,7 @@ lliquidlink.client --> lliquidlink.client._proxy
 lliquidlink.client --> lliquidlink.client._release
 lliquidlink.client --> lliquidlink.client._transports
 lliquidlink.client --> lliquidlink.core
+lliquidlink.client --> lliquidlink.core._logging
 lliquidlink.client._client --> lliquidlink.client._event
 lliquidlink.client._client --> lliquidlink.client._proxy
 lliquidlink.client._client --> lliquidlink.client._release
@@ -158,6 +161,7 @@ lliquidlink.client.models --> lliquidlink.client._schema
 lliquidlink.core --> lliquidlink.core._interfaces
 lliquidlink.core --> lliquidlink.core._rpc
 lliquidlink.core._rpc --> lliquidlink.core._interfaces
+lliquidlink.server --> lliquidlink.core._logging
 lliquidlink.server --> lliquidlink.server.server
 lliquidlink.server.__main__ --> lliquidlink.server.server
 lliquidlink.server._transport --> lliquidlink.server._interfaces
@@ -298,6 +302,8 @@ class RpcResolveChainSetParam <<partial>> {
 }
 class Utils <<static>> {
     + {static} GetCurrentDirectory(path:string) : string
+    + {static} ResolveDataDir(serverDir:string) : string
+    + {static} UnwrapTargetInvocation(ex:Exception) : Exception
 }
 
 "JsonConverter`1" <|-- "RpcJsonConverter`2"
