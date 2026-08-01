@@ -255,7 +255,7 @@ namespace LLiquidLink
         /// <returns>The result of the terminal method call.</returns>
         public object JsonRpc_ResolveChain(RpcResolveChainParam p)
         {
-            _getLogger().DebugFormat("JsonRpc_ResolveChain({0}, {1}, {2}, {3})", p.obj, p.steps, p.method, p.args);
+            _getLogger().DebugFormat("JsonRpc_ResolveChain({0}, {1}, {2}, {3})", p.obj, new ArrayLogFormatter(p.steps), p.method, new ArrayLogFormatter(p.args));
             object? current = p.obj.ValueKind == JsonValueKind.Null ? null : DeserializeRoot(p.obj);
 
             foreach (var step in p.steps)
