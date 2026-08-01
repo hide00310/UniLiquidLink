@@ -241,7 +241,7 @@ namespace LLiquidLink
             if (req.id == null)
             {
                 try { _caller.Call(req.method, args); }
-                catch (Exception ex) { _getLogger().Info("Notify dispatch error " + req.method + ": " + ex.Message); }
+                catch (Exception ex) { _getLogger().Info("Notify dispatch error " + req.method + ": " + Utils.UnwrapTargetInvocation(ex).Message); }
                 return;
             }
 
@@ -253,9 +253,10 @@ namespace LLiquidLink
             }
             catch (Exception ex)
             {
-                Send(JsonRpcFraming.BuildResponse(id, null, ex.Message, _jsonOptions));
-                _getLogger().Info("RPC error " + req.method + ": " + ex.Message);
-                OnError?.Invoke(ClientId, ex);
+                Exception reported = Utils.UnwrapTargetInvocation(ex);
+                Send(JsonRpcFraming.BuildResponse(id, null, reported.Message, _jsonOptions));
+                _getLogger().Info("RPC error " + req.method + ": " + reported.Message);
+                OnError?.Invoke(ClientId, reported);
             }
         }
     }

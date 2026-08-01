@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace LLiquidLink
@@ -18,6 +20,13 @@ namespace LLiquidLink
         public static string ResolveDataDir(string serverDir)
         {
             return Path.GetFullPath(Path.Combine(serverDir, "Data~"));
+        }
+
+        /// <summary>Unwrap reflection's TargetInvocationException to expose the actual thrown exception.</summary>
+        public static Exception UnwrapTargetInvocation(Exception ex)
+        {
+            var tie = ex as TargetInvocationException;
+            return (tie != null && tie.InnerException != null) ? tie.InnerException : ex;
         }
     }
 }

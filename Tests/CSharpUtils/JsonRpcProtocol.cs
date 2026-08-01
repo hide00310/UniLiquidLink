@@ -67,9 +67,10 @@ namespace LLiquidLink
                 catch (Exception ex)
                 {
                     // RPC dispatch errors are returned to the client as JSON-RPC error responses.
-                    SendBytes(JsonRpcFraming.BuildResponse(req.id.Value, null, ex.Message, _jsonOptions));
-                    _getLogger().DebugFormat("[RPC Error] {0}: {1}", req.method, ex.Message);
-                    _onError?.Invoke(ex);
+                    Exception reported = Utils.UnwrapTargetInvocation(ex);
+                    SendBytes(JsonRpcFraming.BuildResponse(req.id.Value, null, reported.Message, _jsonOptions));
+                    _getLogger().DebugFormat("[RPC Error] {0}: {1}", req.method, reported.Message);
+                    _onError?.Invoke(reported);
                 }
             }
         }

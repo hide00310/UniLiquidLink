@@ -63,6 +63,17 @@ public class RpcIntegrationTests
     }
 
     [Test]
+    public void TestMethodThrowsUnwrapsInnerException()
+    {
+        // The reflection-invoked RPC method throws InvalidOperationException("boom"), which the
+        // dispatcher receives wrapped in TargetInvocationException; the error response must carry
+        // the inner exception's message, not the generic reflection wrapper message.
+        string resp = _ctx.SendAndGetResponse(
+            @"{""jsonrpc"":""2.0"",""id"":10,""method"":""RpcTestContext.SampleMethodThrows"",""params"":[42]}");
+        AssertMatchesGolden("golden_method_throws_unwraps_inner_exception", resp);
+    }
+
+    [Test]
     public void TestFind()
     {
         string resp = _ctx.SendAndGetResponse(

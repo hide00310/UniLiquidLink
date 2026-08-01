@@ -49,6 +49,7 @@ public class RpcTestContext
 
         _rpc.AddRpcMethod((Func<int, int>)SampleMethodInt);
         _rpc.AddRpcMethod((Func<int, string, int>)SampleMethodIntStr);
+        _rpc.AddRpcMethod((Func<int, int>)SampleMethodThrows);
         _rpc.AddRpcMethod((Func<string, GameObject>)GameObject.Find);
         _rpc.AddRpcMethod((Func<GameObject, GameObject>)SampleGameObject);
         _rpc.AddRpcMethod((Func<Vector3, Vector3>)SampleVector3);
@@ -64,6 +65,7 @@ public class RpcTestContext
 
     static int SampleMethodInt(int x) { return x; }
     static int SampleMethodIntStr(int x, string s) { return x; }
+    static int SampleMethodThrows(int x) { throw new InvalidOperationException("boom"); }
     static GameObject SampleGameObject(GameObject x) { return x; }
     static Vector3 SampleVector3(Vector3 x) { return x; }
 
