@@ -44,10 +44,15 @@ namespace LLiquidLink.Logger
             _items = items;
         }
 
-        /// <summary>Render the collection as <c>[item1, item2, ...]</c>, using <c>"null"</c> for null elements.</summary>
+        /// <summary>Render the collection as <c>[item1, item2, ...]</c>, using <c>"null"</c> for null elements. Returns <c>"null"</c> if the collection itself is null.</summary>
         /// <returns>The formatted string.</returns>
         public override string ToString()
         {
+            if (_items == null)
+            {
+                return "null";
+            }
+
             var sb = new StringBuilder();
             sb.Append('[');
             bool first = true;
