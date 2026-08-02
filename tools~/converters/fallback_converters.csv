@@ -1,0 +1,2 @@
+﻿,class_name,namespace,extra_usings,output_path,can_convert_expr,deserialize_expr,serialize_expr,server_field_name,add_converter_class,add_converter_namespace,add_converter_method
+0,JsonUtilityConverterFactory,UniLiquidLink,UnityEngine,CSharp/UniLiquidLink/Converters/JsonUtilityConverter.cs,typeToConvert.IsValueType && !typeToConvert.IsPrimitive && !typeToConvert.IsEnum && Nullable.GetUnderlyingType(typeToConvert) == null,"result = JsonUtility.FromJson(rawJson, typeToConvert)",JsonUtility.ToJson(value),,Server,UniLiquidLink,AddFallbackConverterFactory

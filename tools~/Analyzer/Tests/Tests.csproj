@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Must match the Unity asmdef assembly name so LLiquidLink's [InternalsVisibleTo("UniLiquidLink.Tests")] grant applies here too. -->
+    <AssemblyName>UniLiquidLink.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>$(DefineConstants);USE_ROSLYN</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\..\Tests\**\*.cs">
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- UnityEngine.Object (from Mock.cs) collides with System.Object under ImplicitUsings; drop the implicit "using System" so unqualified "Object" resolves unambiguously to UnityEngine.Object, matching real Unity compilation. -->
+    <Using Remove="System" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="5.6.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="NUnit" Version="3.13.3" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="SQLitePCLRaw.core" Version="3.0.3" />
+    <PackageReference Include="System.Text.Json" Version="10.0.9" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LLiquidLink\LLiquidLink.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
+  </PropertyGroup>
+</Project>

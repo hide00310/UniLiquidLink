@@ -10,9 +10,14 @@ will just hang waiting for a Unity parent process.
 The window resolves this script's absolute path automatically, so no manual command
 needs to be entered; the default Python command is "python".
 """
+import argparse
 import asyncio
 import os
 import sys
+
+import logging
+logger = logging.getLogger("lliquidlink")
+logger.setLevel(logging.DEBUG)
 
 from lliquidlink.server.server import Server
 from lliquidlink.server._transport import TcpServerTransport
@@ -23,9 +28,14 @@ from lliquidlink.server._transport import TcpServerTransport
 HOST = "localhost"
 PORT = 8700
 
-
 def main():
-    asyncio.run(Server(TcpServerTransport(HOST, PORT)).serve())
+    # PythonProcessManager (C# side) always appends "-dataDir <path>", pointing at the
+    # directory holding rpc_names.csv / type_names.csv generated for this Unity session.
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-dataDir", required=True)
+    args = parser.parse_args()
+
+    asyncio.run(Server(args.dataDir, TcpServerTransport(HOST, PORT)).serve())
 
 
 if __name__ == "__main__":

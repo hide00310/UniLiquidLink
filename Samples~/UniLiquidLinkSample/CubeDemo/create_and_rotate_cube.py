@@ -8,7 +8,9 @@ Prerequisites:
 import sys
 import os
 
-# sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
+import logging
+logger = logging.getLogger("lliquidlink")
+logger.setLevel(logging.DEBUG)
 
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
@@ -27,9 +29,12 @@ def on_execute(client):
     cube.transform.Rotate(30, 45, 0)
     print("Rotated cube (30 on X, 45 on Y)")
 
-if __name__ == "__main__":
+def main():
     client = Client(TcpJsonRpcTransport("localhost", 8700))
     client.on_execute += on_execute
     print("Connecting to Unity server...")
     client.mainloop()
     print("Done.")
+
+if __name__ == "__main__":
+    main()

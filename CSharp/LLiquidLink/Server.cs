@@ -1,14 +1,10 @@
-using LLiquidLink.Logger;
+﻿using LLiquidLink.Logger;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace LLiquidLink
 {
@@ -22,18 +18,6 @@ namespace LLiquidLink
         Action<Exception> OnError { get; set; }
     }
 
-    public class ConverterOnlyResolver : IJsonTypeInfoResolver
-    {
-        private readonly IJsonTypeInfoResolver _inner = new DefaultJsonTypeInfoResolver();
-
-        public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
-        {
-            bool hasRegisteredConverter = options.Converters.Any(c => c.CanConvert(type));
-
-            return !hasRegisteredConverter ? throw new NotSupportedException(type.FullName) : _inner.GetTypeInfo(type, options);
-        }
-    }
-
     /// <summary>
     /// Assembles and owns the Unity-independent half of the WebSocket-RPC stack: transport wiring,
     /// serializer chain, object/type registries, and RPC dispatch. Host-specific concerns (default
@@ -43,10 +27,11 @@ namespace LLiquidLink
     public class Server : IExecutorServer
     {
         protected readonly ITransportServer _transport;
-        protected readonly StdioTransport _stdioTransport;
-        protected Process _pythonProcess;
+        protected PythonProcessManager _pythonProcessManager;
         protected readonly IMainThreadDispatcher _dispatcher;
         protected readonly List<int> _connectedClients = new List<int>();
+        protected static readonly string ServerDir = Utils.GetCurrentDirectory();
+        protected JsonSerializerChain _jsonChain;
 
         /// <summary>Path to the directory, used to locate python server.</summary>
         public string WorkingDirectory { get; set; }
@@ -55,7 +40,7 @@ namespace LLiquidLink
         internal TypeResolver _typeResolver;
 
         /// <summary>Registrar used to add RPC methods, converters, and property accessors.</summary>
-        public RpcRegistrar Rpc { get; private set; }
+        public RpcRegistry Rpc { get; private set; }
         public ObjectRegistry Registry => _registry;
 
         /// <summary>Fired when a client disconnects. Parameter: client ID.</summary>
@@ -99,11 +84,17 @@ namespace LLiquidLink
             return new NullLogger();
         }
 
-        /// <summary>Register additional main-stage converters. Override to add host-specific converters.</summary>
-        protected virtual void AddConverters() { }
+        /// <summary>Register the core pre/main-stage converters shared by every host.</summary>
+        private void AddConverters(JsonSerializerOptions[] options) {
+            JsonSerializerOptions mainOptions = options[(int)JsonSerializerChain.Stage.Main];
+            JsonSerializerOptions preOptions = options[(int)JsonSerializerChain.Stage.Pre];
+            Rpc.AddConverterAndRegister(mainOptions, new TypeConverter(_typeResolver));
+            Rpc.AddConverterAndRegister(mainOptions, new EnumConverter());
+            Rpc.AddConverter(preOptions, new PreObjectConverter(_registry));
+            Rpc.AddConverterAndRegister(mainOptions, new ObjectPrimitiveConverter());
+        }
 
-        /// <summary>Register additional fallback-stage converter factories. Override to add host-specific converters.</summary>
-        protected virtual void AddFallbackConverters() { }
+        protected virtual void Initialize() { }
 
         /// <summary>Stdio-transport constructor; starts Python middleware and communicates via stdio.</summary>
         /// <param name="dispatcher">Main-thread dispatcher implementation supplied by the host.</param>
@@ -111,24 +102,29 @@ namespace LLiquidLink
         {
             Logger = CreateDefaultLogger();
             _dispatcher = dispatcher;
-            var bus = BuildCoreStack(out JsonSerializerOptions jsonOptions);
-            _stdioTransport = new StdioTransport(_dispatcher, bus, jsonOptions, () => Logger, ex => OnError?.Invoke(ex));
-            _stdioTransport.OnConnect += id => { _connectedClients.Add(id); Logger.Info("Python middleware connected"); };
-            _stdioTransport.OnDisconnect += id => { 
-                _connectedClients.Remove(id); 
-                Logger.Info("Python middleware disconnected"); 
-                OnDisconnect?.Invoke(id); 
-            };
-            bus.Register("OnServerError", (Action<string>)(msg =>
+            MethodCaller caller = BuildCoreStack();
+            _transport = new StdioTransport(dispatcher, caller, _jsonChain.Options[(int)JsonSerializerChain.Stage.Main], () => Logger);
+            Rpc.Register("OnServerError", (Action<string>)(msg =>
             {
                 Logger.Info("Python server error: " + msg);
                 OnServerError?.Invoke(msg);
             }));
+            WireTransportEvents();
+            Initialize();
         }
 
+        /// <summary>
+        /// Safety net for a caller who never called <see cref="Stop"/>: kill the child Python process so it
+        /// does not outlive this object. Deliberately does not call <see cref="Stop"/>, which touches managed
+        /// objects (transport, dispatcher, logger) that may already be finalized or, for <c>_dispatcher</c>,
+        /// require the Unity main thread that the finalizer thread is not.
+        /// </summary>
         ~Server()
         {
-            Stop();
+            if (_pythonProcessManager != null)
+            {
+                _pythonProcessManager.Kill();
+            }
         }
 
         /// <summary>Injection constructor for unit tests: accepts a pre-wired transport and dispatcher.</summary>
@@ -138,35 +134,42 @@ namespace LLiquidLink
         {
             Logger = CreateDefaultLogger();
             _dispatcher = dispatcher;
+            BuildCoreStack();
             _transport = transport;
-            var bus = BuildCoreStack(out JsonSerializerOptions jsonOptions);
-            var protocol = new JsonRpcProtocol(bus, bytes => transport.SendAll(new ArraySegment<byte>(bytes)), () => Logger, jsonOptions, ex => OnError?.Invoke(ex));
-            transport.OnData += (id, seg) => protocol.HandleMessage(seg.Array);
+            WireTransportEvents();
+            Initialize();
+        }
+
+        /// <summary>Subscribe to transport events, shared by every transport (stdio or injected).</summary>
+        void WireTransportEvents()
+        {
+            _transport.OnConnect += (id, ep) => { _connectedClients.Add(id); Logger.Info("Client connected (id=" + id + ", endpoint=" + ep + ")"); };
+            _transport.OnDisconnect += id => { _connectedClients.Remove(id); Logger.Info("Client disconnected (id=" + id + ")"); RaiseOnDisconnect(id); };
+            _transport.OnError += (id, ex) => { Logger.Info("Transport error (id=" + id + "): " + (ex != null ? ex.Message : "")); OnError?.Invoke(ex); };
         }
 
         /// <summary>
-        /// Build the shared RPC core (serializer options, bus, registrar, registries, converters)
+        /// Build the shared RPC core (serializer options, method caller, registrar, registries, converters)
         /// used by both constructors. Transport wiring is left to each constructor.
         /// </summary>
-        /// <param name="jsonOptions">Shared JSON serializer options, also needed by the transport.</param>
-        /// <returns>The configured <see cref="RpcBus"/>.</returns>
-        protected RpcBus BuildCoreStack(out JsonSerializerOptions jsonOptions)
+        /// <returns>The configured <see cref="MethodCaller"/>.</returns>
+        protected MethodCaller BuildCoreStack()
         {
-            jsonOptions = new JsonSerializerOptions { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
-            var fallbackJsonOptions = new JsonSerializerOptions { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
-            var preJsonOptions = new JsonSerializerOptions
-            {
-                UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-                TypeInfoResolver = new ConverterOnlyResolver(),
-            };
-            var chain = new JsonSerializerChain(preJsonOptions, jsonOptions, fallbackJsonOptions);
-            var bus = new RpcBus(() => Logger, chain);
+            var chain = new JsonSerializerChain();
+            _jsonChain = chain;
+
             _registry = new ObjectRegistry(() => Logger);
             _typeResolver = new TypeResolver(() => Logger);
-            Rpc = new RpcRegistrar(bus, chain, () => Logger, _typeResolver);
-            AddConverters();
-            AddFallbackConverters();
-            return bus;
+            Rpc = new RpcRegistry(() => Logger, _typeResolver);
+            var caller = new MethodCaller(() => Logger, chain, Rpc.Searcher);
+            Rpc.Register("JsonRpc_ResolveChain",
+                (Func<RpcResolveChainParam, object>)caller.JsonRpc_ResolveChain);
+            Rpc.Register("JsonRpc_ResolveChainSet",
+                (Func<RpcResolveChainSetParam, object>)caller.JsonRpc_ResolveChainSet);
+            Rpc.Register("JsonRpc_ReleaseObjects",
+                (Func<long[], List<long>>)_registry.RemoveObjects);
+            AddConverters(chain.Options);
+            return caller;
         }
 
         // ─── Lifecycle ───────────────────────────────────────────────────────────
@@ -179,37 +182,19 @@ namespace LLiquidLink
                 return;
             }
 
-            if (_stdioTransport != null)
+            if (_pythonProcessManager != null)
             {
-                _stdioTransport.Stop();
-                try
-                {
-                    if (_pythonProcess != null)
-                    {
-                        // conda run spawns a process tree (conda -> cmd -> python).
-                        // Kill the entire tree so the Python server is also terminated.
-                        var tk = Process.Start(new ProcessStartInfo("taskkill", "/F /T /PID " + _pythonProcess.Id)
-                        {
-                            UseShellExecute = false,
-                            CreateNoWindow = true,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                        });
-                        tk?.WaitForExit(3000);
-                        _pythonProcess.Kill();
-                    }
-                }
-                catch { }
-                _pythonProcess = null;
+                _pythonProcessManager.Kill();
             }
-            else
-            {
-                _transport.Stop();
-            }
+            _transport.Stop();
             _dispatcher.Stop();
             _connectedClients.Clear();
             IsRunning = false;
             Logger.Info("Server stopped");
+
+            // The Python process was already killed above, so the finalizer's safety net is no
+            // longer needed; skip it to avoid an unnecessary finalization queue entry.
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>True while the server is actively listening for connections.</summary>
@@ -222,7 +207,7 @@ namespace LLiquidLink
         /// <param name="data">Optional key-value payload dictionary.</param>
         public void SendEvent(string eventType, Dictionary<string, object> data = null)
         {
-            if (!IsRunning || _connectedClients.Count == 0 || _transport == null)
+            if (!IsRunning || _connectedClients.Count == 0)
             {
                 return;
             }
@@ -239,6 +224,11 @@ namespace LLiquidLink
 
         /// <summary>The <see cref="TypeResolver"/> used to resolve .NET type names from RPC parameters.</summary>
         public TypeResolver TypeResolver => _typeResolver;
+
+        /// <summary>The pre/main/fallback JSON serializer chain, needed by external callers registering converters
+        /// via <see cref="RpcRegistry.AddConverterAndRegister{TOrg, TRpc}"/>, <see cref="RpcRegistry.AddPreConverter{TOrg, TRpc}"/>,
+        /// or <see cref="RpcRegistry.AddConverter"/>.</summary>
+        public JsonSerializerChain JsonChain => _jsonChain;
 
         /// <summary>
         /// Register the assembly of the direct caller and all referenced assemblies for type resolution.

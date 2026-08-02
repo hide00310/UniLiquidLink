@@ -1,10 +1,10 @@
 {
   "a": {
     "orgType": "UnityEngine.GameObject",
-    "name": "UniLiquidLinkTestObject"
+    "name": "UniLiquidLinkTestObject (UnityEngine.GameObject)"
   },
   "b": {
     "orgType": "UnityEngine.GameObject",
-    "name": "UniLiquidLinkTestObject"
+    "name": "UniLiquidLinkTestObject (UnityEngine.GameObject)"
   }
 }

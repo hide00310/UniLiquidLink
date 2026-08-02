@@ -1,7 +1,9 @@
 """Resolves abbreviated RPC method names and short .NET type names using CSV indexes."""
+from __future__ import annotations
 import pandas as pd
 import numpy as np
 import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -14,8 +16,8 @@ class RpcNameResolver:
 
     def __init__(self, csv_path: str):
         # {(class_name, method_name): full_name}
-        self._lookup: pd.DataFrame = None
-        self._abbreviated_classes = np.array([])
+        self._lookup: Optional[pd.DataFrame] = None
+        self._abbreviated_classes: np.ndarray = np.array([])
         self._load(csv_path)
 
     def _load(self, path: str) -> None:
@@ -23,9 +25,9 @@ class RpcNameResolver:
             self._lookup = pd.read_csv(path, encoding="utf-8").set_index(["class_name", "method_name"])
             logger.info("Loaded %d RPC name entries from %s", len(self._lookup), path)
         except FileNotFoundError:
-            logger.warning("RPC names CSV not found at %s; abbreviated class resolution disabled", path)
+            logger.error("RPC names CSV not found at %s; abbreviated class resolution disabled", path)
 
-    def add_abbreviated_classes(self, class_names) -> None:
+    def add_abbreviated_classes(self, class_names: Union[str, List[str]]) -> None:
         """Register a class whose unqualified method names are resolved to full RPC names."""
         if isinstance(class_names, str):
             class_names = [class_names]
@@ -34,7 +36,7 @@ class RpcNameResolver:
                 self._abbreviated_classes = np.append(self._abbreviated_classes, class_name)
                 logger.info("Abbreviated class registered: %s", class_name)
 
-    def try_resolve(self, name: str):
+    def try_resolve(self, name: str) -> Optional[str]:
         """Return the full RPC name for name under any registered abbreviated class.
 
         Returns the full RPC name when a (class_name, name) pair is registered,
@@ -59,21 +61,22 @@ class RpcNameResolver:
         full = self.try_resolve(method)
         return full if full is not None else method
 
-    def resolve_chain_params(self, params: list) -> list:
-        """Resolve the first chain step (params[1][0]['name']) of a ResolveChain* call.
+    def resolve_chain_params(self, params: List[Any]) -> List[Any]:
+        """Resolve the first chain step (params[0]['steps'][0]['name']) of a ResolveChain* call.
 
-        For a root chain (params[0] is null), the first step name may be an
+        For a root chain (params[0]['obj'] is null), the first step name may be an
         abbreviated-class member: registering 'A' lets the client write `B.C.D`
         instead of `A.B.C.D`. Returns a new params list with the first step name
         replaced by its full RPC name when (abbreviated_class, name) is registered;
         otherwise returns params unchanged.
         """
-        if len(params) < 2:
+        if len(params) < 1 or not isinstance(params[0], dict):
             return params
+        param = params[0]
         # Only root chains (obj is null) carry an abbreviated-class first step.
-        if params[0] is not None:
+        if param.get("obj") is not None:
             return params
-        steps = params[1]
+        steps = param.get("steps")
         if not isinstance(steps, list) or len(steps) == 0:
             return params
         first = steps[0]
@@ -87,11 +90,11 @@ class RpcNameResolver:
         new_first["name"] = full
         new_steps = list(steps)
         new_steps[0] = new_first
-        new_params = list(params)
-        new_params[1] = new_steps
-        return new_params
+        new_param = dict(param)
+        new_param["steps"] = new_steps
+        return [new_param]
 
-    def try_resolve_class_method(self, class_name: str, method: str):
+    def try_resolve_class_method(self, class_name: str, method: str) -> Optional[str]:
         """Return the full RPC name registered for (class_name, method), or None.
 
         Unlike try_resolve this keys on an explicit written class step rather than
@@ -107,30 +110,33 @@ class RpcNameResolver:
             full = str(full.iloc[0])
         return full
 
-    def try_collapse_static_chain(self, method: str, params: list):
+    def try_collapse_static_chain(self, method: str, params: List[Any]) -> Optional[Tuple[str, List[Any]]]:
         """Collapse a root JsonRpc_ResolveChain whose last step is a static class.
 
-        params layout: [obj, steps, terminal, args].  Only root chains (obj is None)
-        whose last step name resolves to a non-underscore registered method are
-        collapsed.  Returns (full_name, args) or None.
+        params layout: [{"obj":..., "steps":..., "method":..., "args":...}].  Only root
+        chains (obj is None) whose last step name resolves to a non-underscore registered
+        method are collapsed.  The "method" key only exists on JsonRpc_ResolveChain params
+        (JsonRpc_ResolveChainSet uses "property"/"value"), so that alone excludes Set calls.
+        Returns (full_name, args) or None.
         """
-        if method != "JsonRpc_ResolveChain" or len(params) < 4:
+        if method != "JsonRpc_ResolveChain" or len(params) < 1 or not isinstance(params[0], dict):
             return None
-        if params[0] is not None:
+        param = params[0]
+        if param.get("obj") is not None:
             return None
-        steps = params[1]
+        steps = param.get("steps")
         if not isinstance(steps, list) or len(steps) == 0:
             return None
         last = steps[-1]
         if not isinstance(last, dict) or "name" not in last:
             return None
-        terminal = params[2]
+        terminal = param.get("method")
         if not isinstance(terminal, str):
             return None
         full = self.try_resolve_class_method(last["name"], terminal)
         if full is None or full.startswith("_"):
             return None
-        return full, params[3]
+        return full, param.get("args")
 
 
 class TypeNameResolver:
@@ -144,11 +150,11 @@ class TypeNameResolver:
 
     def __init__(self, csv_path: str):
         # lower(full_name) -> original full_name
-        self._by_full_name_lower: dict = {}
+        self._by_full_name_lower: Dict[str, str] = {}
         # lower(simple_name) -> [full_name, ...]
-        self._by_simple_name: dict = {}
-        self._abbreviated_namespaces: list = []
-        self._loaded = False
+        self._by_simple_name: Dict[str, List[str]] = {}
+        self._abbreviated_namespaces: List[str] = []
+        self._loaded: bool = False
         self._load(csv_path)
 
     def _load(self, path: str) -> None:
@@ -162,9 +168,9 @@ class TypeNameResolver:
             self._loaded = True
             logger.info("Loaded %d type names from %s", len(self._by_full_name_lower), path)
         except FileNotFoundError:
-            logger.warning("Type names CSV not found at %s; type name resolution disabled", path)
+            logger.error("Type names CSV not found at %s; type name resolution disabled", path)
 
-    def add_abbreviated_namespaces(self, namespaces) -> None:
+    def add_abbreviated_namespaces(self, namespaces: Union[str, List[str]]) -> None:
         """Register namespaces whose types can be referred to by simple name."""
         if isinstance(namespaces, str):
             namespaces = [namespaces]

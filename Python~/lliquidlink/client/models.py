@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ._schema import *
 
-def type_(value: str):
+def type_(value: str) -> RpcType:
     """Create an RpcType parameter for passing a .NET Type to a Unity RPC method.
 
     Args:
@@ -13,5 +13,5 @@ def type_(value: str):
     """
     return RpcType(value)
 
-def enum(value: str):
+def enum(value: str) -> RpcEnum:
     return RpcEnum(value)

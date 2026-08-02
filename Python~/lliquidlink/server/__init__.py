@@ -1,11 +1,13 @@
+from __future__ import annotations
 import logging
 import os
 
 module_dir = os.path.abspath(os.path.dirname(__file__))
 
 logger = logging.getLogger(__name__)
-def setup_logger():
-    level = logging.INFO
+def setup_logger() -> None:
+    from ..core._logging import resolve_configured_level
+    level = resolve_configured_level(logger, default=logging.INFO)
     log_path = f"{module_dir}/log.log"
     try:
         os.remove(log_path)

@@ -1,3 +1,6 @@
+using System.Collections;
+using System.Text;
+
 namespace LLiquidLink.Logger
 {
 
@@ -27,5 +30,43 @@ namespace LLiquidLink.Logger
         /// <param name="format">Format string.</param>
         /// <param name="args">Format arguments.</param>
         void DebugFormat(string format, params object[] args);
+    }
+
+    /// <summary>Wraps an <see cref="IEnumerable"/> so its elements are rendered in log output instead of the array's type name.</summary>
+    public class ArrayLogFormatter
+    {
+        readonly IEnumerable _items;
+
+        /// <summary>Initialize the formatter with the collection to render.</summary>
+        /// <param name="items">Collection whose elements will be stringified.</param>
+        public ArrayLogFormatter(IEnumerable items)
+        {
+            _items = items;
+        }
+
+        /// <summary>Render the collection as <c>[item1, item2, ...]</c>, using <c>"null"</c> for null elements. Returns <c>"null"</c> if the collection itself is null.</summary>
+        /// <returns>The formatted string.</returns>
+        public override string ToString()
+        {
+            if (_items == null)
+            {
+                return "null";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append('[');
+            bool first = true;
+            foreach (object item in _items)
+            {
+                if (!first)
+                {
+                    sb.Append(", ");
+                }
+                first = false;
+                sb.Append(item == null ? "null" : item.ToString());
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
     }
 }

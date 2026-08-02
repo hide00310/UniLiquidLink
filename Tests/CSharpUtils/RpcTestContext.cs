@@ -1,9 +1,8 @@
-using LLiquidLink;
+﻿using LLiquidLink;
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using UniLiquidLink;
 using UnityEditor;
@@ -14,42 +13,43 @@ public class RpcTestContext
 {
     public List<string> Responses = new List<string>();
 
-    readonly RpcRegistrar _rpc;
+    readonly RpcRegistry _rpc;
     readonly JsonRpcProtocol _protocol;
     readonly GoldenTestLogger _logger;
 
     public RpcTestContext()
     {
         _logger = new GoldenTestLogger();
-        var jsonOptions = new JsonSerializerOptions { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
-        var preJsonOptions = new JsonSerializerOptions
-        {
-            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-            TypeInfoResolver = new ConverterOnlyResolver(),
-        };
-        var fallbackJsonOptions = new JsonSerializerOptions { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
-        var chain = new JsonSerializerChain(preJsonOptions, jsonOptions, fallbackJsonOptions);
-        var bus = new RpcBus(() => _logger, chain);
+        var chain = new JsonSerializerChain();
+        var mainOptions = chain.Options[(int)JsonSerializerChain.Stage.Main];
+        var preOptions = chain.Options[(int)JsonSerializerChain.Stage.Pre];
+        var fallbackOptions = chain.Options[(int)JsonSerializerChain.Stage.Fallback];
 
         var server = new UniLiquidLink.Server(string.Empty, new NullTransport(), new NullDispatcher());
         server._typeResolver.RegisterCallerAssembly();
 
-        _rpc = new RpcRegistrar(bus, chain, () => _logger, typeResolver: server._typeResolver);
+        _rpc = new RpcRegistry(() => _logger, typeResolver: server._typeResolver);
+        var caller = new MethodCaller(() => _logger, chain, _rpc.Searcher);
+        _rpc.Register("JsonRpc_ResolveChain",
+            (Func<RpcResolveChainParam, object>)caller.JsonRpc_ResolveChain);
+        _rpc.Register("JsonRpc_ResolveChainSet",
+            (Func<RpcResolveChainSetParam, object>)caller.JsonRpc_ResolveChainSet);
         // RPC dispatch errors are returned to the client as JSON-RPC error responses,
         // which tests inspect via Responses; do not rethrow them here.
         _protocol = new JsonRpcProtocol(
-            bus,
+            caller,
             bytes => Responses.Add(ParseFrame(bytes)),
-            () => _logger, jsonOptions, ex => { });
+            () => _logger, mainOptions, ex => { });
 
-        _rpc.AddRpcConverter(new TypeConverter(server._typeResolver));
-        _rpc.AddRpcConverter(new UnityObjectConverter(server._registry));
-        _rpc.AddRpcConverter(new EnumConverter());
-        _rpc.AddPreConverter(new PreObjectConverter(server._registry));
-        _rpc.AddFallbackConverterFactory(new JsonUtilityConverterFactory());
+        _rpc.AddConverterAndRegister(mainOptions, new TypeConverter(server._typeResolver));
+        _rpc.AddConverterAndRegister(mainOptions, new UnityObjectConverter(server._registry));
+        _rpc.AddConverterAndRegister(mainOptions, new EnumConverter());
+        _rpc.AddConverter(preOptions, new PreObjectConverter(server._registry));
+        _rpc.AddConverter(fallbackOptions, new JsonUtilityConverterFactory());
 
         _rpc.AddRpcMethod((Func<int, int>)SampleMethodInt);
         _rpc.AddRpcMethod((Func<int, string, int>)SampleMethodIntStr);
+        _rpc.AddRpcMethod((Func<int, int>)SampleMethodThrows);
         _rpc.AddRpcMethod((Func<string, GameObject>)GameObject.Find);
         _rpc.AddRpcMethod((Func<GameObject, GameObject>)SampleGameObject);
         _rpc.AddRpcMethod((Func<Vector3, Vector3>)SampleVector3);
@@ -65,6 +65,7 @@ public class RpcTestContext
 
     static int SampleMethodInt(int x) { return x; }
     static int SampleMethodIntStr(int x, string s) { return x; }
+    static int SampleMethodThrows(int x) { throw new InvalidOperationException("boom"); }
     static GameObject SampleGameObject(GameObject x) { return x; }
     static Vector3 SampleVector3(Vector3 x) { return x; }
 

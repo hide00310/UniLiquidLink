@@ -24,6 +24,9 @@ namespace UniLiquidLink.Samples
             SetupDemoScene();
 
             server = new Server(pythonServerStartCommand);
+            // Set log level
+            server.Logger.MinLevel = LLiquidLink.Logger.LogLevel.Debug;
+
             // Register UnityEngine assemblies so type_("Material") etc. resolve correctly.
             server.RegisterCallerAssembly();
 

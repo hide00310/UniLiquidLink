@@ -17,17 +17,9 @@ namespace LLiquidLink
     }
 
     /// <summary>
-    /// Single step in a property/method chain resolved server-side.
+    /// JSON-serializable descriptor for a live Instance Object.
     /// </summary>
-    public partial class RpcChainStep
-    {
-        public string name { get; set; }
-    }
-
-    /// <summary>
-    /// JSON-serializable descriptor for a live Unity Object instance.
-    /// </summary>
-    public partial class RpcUnityObject
+    public partial class RpcInstanceObject
     {
         public long instanceId { get; set; }
         public long? instanceObjectAttr { get; set; }
@@ -37,11 +29,42 @@ namespace LLiquidLink
     }
 
     /// <summary>
-    /// Represents a .NET Type reference transmitted as a JSON-RPC parameter.
+    /// Represents a .NET enum reference transmitted as a JSON-RPC parameter.
     /// </summary>
     public partial class RpcEnum
     {
         public long? rpcEnum { get; set; }
         public string value { get; set; }
+    }
+
+    public partial class RpcRequest
+    {
+        public long? id { get; set; }
+        public string method { get; set; }
+        public System.Text.Json.JsonElement[] @params { get; set; }
+    }
+
+    public partial class RpcResolveChainParam
+    {
+        public System.Text.Json.JsonElement[] args { get; set; }
+        public string method { get; set; }
+        public System.Text.Json.JsonElement obj { get; set; }
+        public RpcChainStep[] steps { get; set; }
+    }
+
+    /// <summary>
+    /// Single step in a property/method chain resolved server-side.
+    /// </summary>
+    public partial class RpcChainStep
+    {
+        public string name { get; set; }
+    }
+
+    public partial class RpcResolveChainSetParam
+    {
+        public System.Text.Json.JsonElement obj { get; set; }
+        public string property { get; set; }
+        public RpcChainStep[] steps { get; set; }
+        public System.Text.Json.JsonElement value { get; set; }
     }
 }

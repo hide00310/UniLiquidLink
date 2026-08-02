@@ -20,7 +20,8 @@ def _dispatch(method, params):
         return {"instanceId": 100, "orgType": "UnityEngine.GameObject",
                 "name": params[0], "instanceObjectAttr" : 1}
     if method == "JsonRpc_ResolveChain":
-        obj, _steps, m, args = params
+        p = params[0]
+        obj, m, args = p["obj"], p["method"], p["args"]
         if m == "transform":
             return {"instanceId": 200, "orgType": "UnityEngine.Transform",
                     "name": obj.get("name"), "instanceObjectAttr" : 1}

@@ -19,7 +19,12 @@ namespace LLiquidLink
                 return null;
             }
             var rpcObj = JsonSerializer.Deserialize<RpcEnum>(ref reader, DtoOptions);
-            return rpcObj == null ? null : (System.Enum)Enum.Parse(typeToConvert, rpcObj.value);
+            if (rpcObj == null)
+            {
+                return null;
+            }
+
+            return (System.Enum)Enum.Parse(typeToConvert, rpcObj.value);
         }
 
         public override void Write(Utf8JsonWriter writer, System.Enum value, JsonSerializerOptions options)

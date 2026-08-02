@@ -16,6 +16,10 @@ namespace UniLiquidLink.Samples
         public CubeDemoServer(string pythonServerStartCommand)
         {
             server = new Server(pythonServerStartCommand);
+
+            // Set log level
+            server.Logger.MinLevel = LLiquidLink.Logger.LogLevel.Debug;
+
             // Register UnityEngine assemblies so type_("Renderer") resolves correctly.
             server.RegisterCallerAssembly();
 

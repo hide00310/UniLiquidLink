@@ -23,9 +23,11 @@ jobs:
         run: pip install .[test]
 
       - name: Run unit tests (Unity-independent only)
-        # test_integration.py requires a running Unity Editor with the
-        # Integration Test Server started, so it cannot run in CI.
-        run: pytest --ignore=Tests/Python~/test_integration.py
+        # test_integration.py, test_sample_cube_demo.py, and
+        # test_sample_all_features_tour.py all require a running Unity Editor
+        # with the corresponding sample/test server started, so they cannot
+        # run in CI.
+        run: pytest --ignore=Tests/Python~/test_integration.py --ignore=Tests/Python~/test_sample_cube_demo.py --ignore=Tests/Python~/test_sample_all_features_tour.py
 
   release:
     needs: test

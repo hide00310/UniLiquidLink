@@ -54,7 +54,7 @@ public static class GenerateRpcGolden
 
         // 5. ResolveChain: go → .transform
         string req5 = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[],""transform"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":5,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""transform"",""args"":null}}]}}",
             goRpcObj);
         string r5 = ctx.SendAndGetResponse(req5);
         WriteGolden(goldenDir, "golden_resolve_chain_get_transform", RpcTestContext.NormalizeInstanceIds(r5));
@@ -64,26 +64,26 @@ public static class GenerateRpcGolden
 
         // 6. ResolveChain: go → [transform step] → .gameObject
         string req6 = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":6,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[{{""name"":""transform""}}],""gameObject"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":6,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""method"":""gameObject"",""args"":null}}]}}",
             goRpcObj);
         string r6 = ctx.SendAndGetResponse(req6);
         WriteGolden(goldenDir, "golden_resolve_chain_chained_step", RpcTestContext.NormalizeInstanceIds(r6));
 
         // 7. ResolveChain: transform → Rotate(10, 20, 30, Space.Self)
         string req7 = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":7,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[],""Rotate"",[10.0,20.0,30.0,{{""value"":""Self"",""rpcEnum"":1}}]]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":7,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""Rotate"",""args"":[10.0,20.0,30.0,{{""value"":""Self"",""rpcEnum"":1}}]}}]}}",
             tRpcObj);
         string r7 = ctx.SendAndGetResponse(req7);
         WriteGolden(goldenDir, "golden_resolve_chain_rotate", r7);
 
         // 8. ResolveChainSet: go → [transform step] → set position, then read it back
         string req8Set = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":8,""method"":""JsonRpc_ResolveChainSet"",""params"":[{0},[{{""name"":""transform""}}],""position"",{{""x"":1,""y"":2,""z"":3}}]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":8,""method"":""JsonRpc_ResolveChainSet"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""property"":""position"",""value"":{{""x"":1,""y"":2,""z"":3}}}}]}}",
             goRpcObj);
         ctx.SendAndGetResponse(req8Set);
 
         string req9Get = string.Format(
-            @"{{""jsonrpc"":""2.0"",""id"":9,""method"":""JsonRpc_ResolveChain"",""params"":[{0},[{{""name"":""transform""}}],""position"",null]}}",
+            @"{{""jsonrpc"":""2.0"",""id"":9,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[{{""name"":""transform""}}],""method"":""position"",""args"":null}}]}}",
             goRpcObj);
         string r9 = ctx.SendAndGetResponse(req9Get);
         WriteGolden(goldenDir, "golden_resolve_chain_set_position", r9);

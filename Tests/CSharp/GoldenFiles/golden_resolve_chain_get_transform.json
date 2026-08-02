@@ -1,1 +1,1 @@
-{"jsonrpc":"2.0","id":5,"result":{"instanceId":0,"instanceObjectAttr":null,"name":"UniLiquidLinkTestObject","orgType":"UnityEngine.Transform","rpcType":"LLiquidLink.RpcUnityObject"}}
+{"jsonrpc":"2.0","id":5,"result":{"instanceId":0,"instanceObjectAttr":null,"name":"UniLiquidLinkTestObject (UnityEngine.Transform)","orgType":"UnityEngine.Transform","rpcType":"LLiquidLink.RpcInstanceObject"}}

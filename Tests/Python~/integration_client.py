@@ -3,6 +3,8 @@ IntegrationClient and pytest fixture for integration tests.
 Edit this file to add/remove test scenarios (run_* methods).
 Run generate_test_integration.py to regenerate test_integration.py.
 """
+import gc
+
 import pytest
 import pytest_asyncio
 from lliquidlink.client import Client, ObjectProxy, TcpJsonRpcTransport
@@ -22,7 +24,7 @@ def _normalize(obj):
 
 class IntegrationClient(Client):
     def __init__(self):
-        super().__init__(TcpJsonRpcTransport("localhost", 8700))
+        super().__init__(TcpJsonRpcTransport("localhost", 8700), verify_releases=True)
         self.captured = {}
         self.on_execute += self._on_execute
 
@@ -169,6 +171,17 @@ class IntegrationClient(Client):
     def run_object_method(self):
         g = self.Find("UniLiquidLinkTestObject")
         return self._try(lambda: self.SampleClass.ObjectMethod(g))
+
+    def run_gc_flush(self):
+        """Verify GC-triggered release batching reaches Unity via rpc_call."""
+        def scenario():
+            proxy = self.Find("UniLiquidLinkTestObject")
+            instance_id = proxy.data.get("instanceId")
+            del proxy
+            gc.collect()
+            confirmed = self.flush_releases()
+            return instance_id in (confirmed or [])
+        return self._try(scenario)
 
     def _on_execute(self, _client):
         self.add_abbreviated_classes(["GameObject", "UniLiquidLinkIntegrationTest", "AssetDatabase"])

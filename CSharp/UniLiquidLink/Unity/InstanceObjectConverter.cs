@@ -1,11 +1,11 @@
-using LLiquidLink;
 using System;
 using System.Text.Json;
+using LLiquidLink;
 
 namespace UniLiquidLink
 {
 
-    public class InstanceObjectConverter<T> : RpcJsonConverter<T, RpcUnityObject> where T : UnityEngine.Object
+    public class InstanceObjectConverter<T> : RpcJsonConverter<T, RpcInstanceObject> where T : class
     {
         internal readonly ObjectRegistry _registry;
 
@@ -25,38 +25,30 @@ namespace UniLiquidLink
             {
                 return null;
             }
-            var rpcObj = JsonSerializer.Deserialize<RpcUnityObject>(ref reader, DtoOptions);
+            var rpcObj = JsonSerializer.Deserialize<RpcInstanceObject>(ref reader, DtoOptions);
             if (rpcObj == null)
             {
                 return null;
             }
 
-            var ret = (T)_registry.GetObject(rpcObj.instanceId);
-            if (ret == null)
-            {
-                throw new ArgumentException($"Object {rpcObj.instanceId} not found");
-            }
+            var ret = _registry.GetObject(rpcObj.instanceId);
+            if (ret == null) throw new RpcJsonConverterReadException($"Object {rpcObj.instanceId} not found");
 
-            if (rpcObj.orgType != ret.GetType().FullName)
-            {
-                throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {ret.GetType().FullName}");
-            }
-
-            return !typeToConvert.IsAssignableFrom(ret.GetType())
-                ? throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {typeToConvert.FullName}")
-                : ret;
+            if (rpcObj.orgType != ret.GetType().FullName) throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {ret.GetType().FullName}");
+            if (!typeToConvert.IsAssignableFrom(ret.GetType())) throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {typeToConvert.FullName}");
+            return (T)ret;
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         {
             if (value == null) { writer.WriteNullValue(); return; }
             long id = _registry.RegisterObject(value);
-            JsonSerializer.Serialize(writer, new RpcUnityObject
+            JsonSerializer.Serialize(writer, new RpcInstanceObject
             {
-                rpcType = typeof(RpcUnityObject).FullName,
+                rpcType = typeof(RpcInstanceObject).FullName,
                 instanceId = id,
                 orgType = value.GetType().FullName,
-                name = value.name
+                name = value.ToString()
             }, DtoOptions);
         }
     }

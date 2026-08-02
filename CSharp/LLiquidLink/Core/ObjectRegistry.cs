@@ -14,7 +14,7 @@ namespace LLiquidLink
         internal readonly Dictionary<long, object> _objectMap = new Dictionary<long, object>();
 
         /// <summary>Fired when an object is removed from the registry. Parameter: instance ID.</summary>
-        public event Action<int> OnRemoveObject;
+        public event Action<long> OnRemoveObject;
 
         /// <summary>Initialize the registry with a logger factory.</summary>
         /// <param name="getLogger">Factory that returns the current logger instance.</param>
@@ -46,12 +46,13 @@ namespace LLiquidLink
 
         /// <summary>Remove <paramref name="obj"/> from the in-memory map and fire <see cref="OnRemoveObject"/>.</summary>
         /// <param name="obj">Unity object to unregister.</param>
-        public void UnregisterObject(object obj)
+        public bool UnregisterObject(object obj)
         {
             if (obj != null)
             {
-                RemoveObject(RuntimeHelpers.GetHashCode(obj));
+                return RemoveObject(RuntimeHelpers.GetHashCode(obj));
             }
+            return false;
         }
 
         /// <summary>Clear all entries from the in-memory map.</summary>
@@ -63,13 +64,25 @@ namespace LLiquidLink
 
         /// <summary>Remove the entry for <paramref name="instanceId"/> and fire <see cref="OnRemoveObject"/> if it existed.</summary>
         /// <param name="instanceId">Instance ID of the object to remove.</param>
-        public void RemoveObject(int instanceId)
+        public bool RemoveObject(long instanceId)
         {
             bool removed = _objectMap.Remove(instanceId);
             if (removed)
             {
                 OnRemoveObject?.Invoke(instanceId);
             }
+            return removed;
+        }
+
+        public List<long> RemoveObjects(long[] instanceIds)
+        {
+            List<long> ret = new List<long>();
+            foreach (long id in instanceIds)
+            {
+                bool removed = RemoveObject(id);
+                if (removed) ret.Add(id);
+            }
+            return ret;
         }
     }
 }

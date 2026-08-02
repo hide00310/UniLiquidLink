@@ -1,6 +1,6 @@
 import json
 
-from lliquidlink.client.models import RpcChainStep
+from lliquidlink.client.models import RpcChainStep, RpcResolveChainParam
 from lliquidlink.client._serialization import Serialization
 
 
@@ -54,3 +54,23 @@ def test_object_hook_roundtrip():
     result = json.loads(text, object_hook=hook)
     assert result["obj"] is sentinel
     assert result["plain"] == {"k": "v"}
+
+
+class _DummyProxy:
+    def __init__(self, data):
+        self.data = data
+    def _asdict(self):
+        return self.data
+
+
+def test_asdict_hook_flat():
+    assert _ser([_DummyProxy({"instanceObjectAttr": 1, "name": "x"})]) == \
+        [{"instanceObjectAttr": 1, "name": "x"}]
+
+
+def test_asdict_hook_nested_in_dataclass_field():
+    """A live _asdict()-object nested inside a dataclass field (list element) must
+    still serialize flat (mirrors RpcResolveChainParam.args holding an ObjectProxy
+    when a proxy is passed as a method argument)."""
+    param = RpcResolveChainParam(obj=None, steps=[], method="Foo", args=[_DummyProxy({"k": "v"})])
+    assert _ser([param]) == [{"obj": None, "steps": [], "method": "Foo", "args": [{"k": "v"}]}]

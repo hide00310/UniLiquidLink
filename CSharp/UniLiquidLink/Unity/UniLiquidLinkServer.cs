@@ -1,4 +1,4 @@
-using LLiquidLink;
+﻿using LLiquidLink;
 using LLiquidLink.Logger;
 using System;
 using System.Diagnostics;
@@ -72,7 +72,7 @@ namespace UniLiquidLink
 
         static Server()
         {
-            RpcBus.AdditionalDefaultValueAttributeTypes.Add(typeof(UnityEngine.Internal.DefaultValueAttribute));
+            RpcRegistry.AdditionalDefaultValueAttributeTypes.Add(typeof(UnityEngine.Internal.DefaultValueAttribute));
         }
 
         /// <summary>Production constructor; starts Python middleware and communicates via stdio.</summary>
@@ -91,47 +91,27 @@ namespace UniLiquidLink
 
         // ─── Lifecycle ───────────────────────────────────────────────────────────
 
-        /// <summary>Start the server, register transport event handlers, and begin processing connections.</summary>
+        /// <summary>Start the server, launching the Python middleware first when running in stdio mode.</summary>
         public void Start()
         {
-            if (_stdioTransport != null)
+            if (IsRunning)
             {
-                string workDir = WorkingDirectory
-                    ?? GetRootLibDirectory();
-                Rpc.SaveRpcNamesCsv(System.IO.Path.Combine(workDir, "rpc_names.csv"));
-                _typeResolver.SaveAllowedTypesCsv(System.IO.Path.Combine(workDir, "type_names.csv"));
-                _dispatcher.Start();
-                _pythonProcess = StartPythonMiddleware(_pythonServerStartCommand);
-                _stdioTransport.Start(
-                    _pythonProcess.StandardOutput.BaseStream,
-                    _pythonProcess.StandardInput.BaseStream,
-                    _pythonProcess.StandardError.BaseStream
-                );
-                IsRunning = true;
-                Logger.Info("Server started (stdio mode) in "+ workDir);
                 return;
             }
-
-            _transport.OnConnect += (id, ep) => { _connectedClients.Add(id); Logger.Info($"Python connected (id={id})"); };
-            _transport.OnDisconnect += id =>
+            if (_transport is StdioTransport)
             {
-                _connectedClients.Remove(id);
-                Logger.Info($"Python disconnected (id={id})");
-                RaiseOnDisconnect(id);
-            };
-            _transport.OnError += (id, ex) =>
-            {
-                Logger.Info($"Error (id={id}): {ex?.Message}");
-                OnError?.Invoke(ex);
-            };
+                string workDir = WorkingDirectory ?? GetRootLibDirectory();
+                string dataDir = Utils.ResolveDataDir(ServerDir);
+                Rpc.SaveRpcNamesCsv(Path.Combine(dataDir, "rpc_names.csv"));
+                _typeResolver.SaveAllowedTypesCsv(Path.Combine(dataDir, "type_names.csv"));
+                _pythonProcessManager = new PythonProcessManager(() => Logger, _pythonServerStartCommand, workDir, dataDir);
+                Process p = _pythonProcessManager.Start();
+                ((StdioTransport)_transport).AttachStreams(p.StandardOutput.BaseStream, p.StandardInput.BaseStream, p.StandardError.BaseStream);
+            }
             _dispatcher.Start();
             _transport.Start();
             IsRunning = true;
-            Logger.Info($"Server started");
-        }
-        private static string GetCurrentDirectory([CallerFilePath] string path = null)
-        {
-            return string.IsNullOrEmpty(path) ? null : Path.GetDirectoryName(path);
+            Logger.Info("Server started" + (_pythonProcessManager != null ? " (stdio mode)" : ""));
         }
 
         // Resolve the WebSocketLib root directory next to this source file.
@@ -143,29 +123,6 @@ namespace UniLiquidLink
             }
             string csharpUnityDir = Path.GetDirectoryName(path);
             return Path.GetFullPath(Path.Combine(csharpUnityDir, "..", "..", ".."));
-        }
-
-        Process StartPythonMiddleware(string pythonServerStartCommand)
-        {
-            string workDir = WorkingDirectory
-                ?? GetRootLibDirectory();
-            string[] cmds = pythonServerStartCommand.Split(" ");
-            string fileName = cmds[0];
-            string arguments = string.Join(" ", cmds, 1, cmds.Length - 1);
-            var psi = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                UseShellExecute = false,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = false,
-                WorkingDirectory = workDir
-            };
-            var p = Process.Start(psi);
-            Logger.Info($"Python middleware started (pid={p.Id}, cmd={fileName} {arguments})");
-            return p;
         }
 
         // ─── Delegating methods ───────────────────────────────────────────────────
@@ -182,6 +139,18 @@ namespace UniLiquidLink
         public void UnregisterObject(UnityEngine.Object obj)
         {
             _registry.UnregisterObject(obj);
+        }
+
+        private void AddUniConverters()
+        {
+            Rpc.AddConverterAndRegister(_jsonChain.Options[(int)JsonSerializerChain.Stage.Main], new UnityObjectConverter(_registry));
+            Rpc.AddConverter(_jsonChain.Options[(int)JsonSerializerChain.Stage.Fallback], new JsonUtilityConverterFactory());
+        }
+
+        protected override void Initialize()
+        {
+            base.Initialize();
+            AddUniConverters();
         }
     }
 }

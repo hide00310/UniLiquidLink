@@ -7,12 +7,16 @@ Prerequisites:
 """
 import sys
 import os
+import gc
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Python~'))
-
-from lliquidlink.client import Client, TcpJsonRpcTransport, RpcError
+from lliquidlink.client import Client, TcpJsonRpcTransport, RpcError, gc_flush
 from lliquidlink.client.models import type_, enum
+import lliquidlink.client
 
+import logging
+
+logger = logging.getLogger(lliquidlink.client.__name__)
+logger.setLevel(logging.DEBUG)
 
 DEMO_OBJECT = "AllFeaturesTourObject"
 DEMO_ASSET  = "Assets/AllFeaturesTourSample.mat"
@@ -90,10 +94,28 @@ def on_execute(client):
     print("SampleClass.ObjectOverload(go):", client.SampleClass.ObjectOverload(go))
     print("SampleClass.ObjectOverload(transform):", client.SampleClass.ObjectOverload(t))
 
-if __name__ == "__main__":
+    # ── gc_flush decorator — auto-flush releases after the call returns ──────
+    print("\n=== gc_flush decorator ===")
+
+    @gc_flush
+    def find_and_drop(self):
+        proxy = self.Find(DEMO_OBJECT)
+        return "proxy created"
+
+    print("find_and_drop(client) [flush_releases() runs automatically after return]:", find_and_drop(client))
+    # gc.collect() below is only to force collection deterministically for this
+    # demo; normal code doesn't need it — gc_flush just flushes whatever
+    # release backlog has naturally accumulated by the time the decorated
+    # call returns.
+    gc.collect()
+
+def main():
     client = Client(TcpJsonRpcTransport("localhost", 8700))
     client.on_execute += on_execute
 
     print("Connecting to Unity server...")
     client.mainloop()
     print("\nAll features tour complete.")
+
+if __name__ == "__main__":
+    main()

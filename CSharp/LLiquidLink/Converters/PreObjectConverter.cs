@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace LLiquidLink
 {
 
-    public class PreObjectConverter : RpcJsonConverter<object, RpcUnityObject>
+    public class PreObjectConverter : RpcJsonConverter<object, RpcInstanceObject>
     {
         readonly ObjectRegistry _registry;
 
@@ -24,21 +24,17 @@ namespace LLiquidLink
             {
                 return null;
             }
-            var rpcObj = JsonSerializer.Deserialize<RpcUnityObject>(ref reader, DtoOptions);
+            var rpcObj = JsonSerializer.Deserialize<RpcInstanceObject>(ref reader, DtoOptions);
             if (rpcObj == null)
             {
                 return null;
             }
 
             var ret = _registry.GetObject(rpcObj.instanceId);
-            if (ret == null)
-            {
-                throw new ArgumentException($"Object {rpcObj.instanceId} not found");
-            }
+            if (ret == null) throw new RpcJsonConverterReadException($"Object {rpcObj.instanceId} not found");
 
-            return rpcObj.orgType != ret.GetType().FullName
-                ? throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {ret.GetType().FullName}")
-                : ret;
+            if (rpcObj.orgType != ret.GetType().FullName) throw new RpcJsonConverterReadException($"Object {rpcObj.orgType} != {ret.GetType().FullName}");
+            return (object)ret;
         }
 
         public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
