@@ -21,6 +21,14 @@ namespace UniLiquidLink
     {
         const string SamplesAssemblyName = "UniLiquidLink.Samples";
 
+        // Raw python.exe path (no quoting, no trailing arguments) for the batch-mode
+        // entry points below. Distinct in shape from LLIQUIDLINK_PYTHON_SERVER_COMMAND
+        // (BatchModeIntegrationTest.cs), which is already a complete
+        // "<python.exe>" -m lliquidlink.server command string: BuildCommand() appends
+        // the middleware script path itself, so feeding it that pre-built command
+        // would duplicate/corrupt the resulting command line.
+        const string PythonExeEnvVar = "LLIQUIDLINK_PYTHON_EXE";
+
         // Resolves run_middleware_server.py relative to this source file, so the
         // path is correct regardless of where the package/repo is checked out.
         static string GetMiddlewareScriptPath([CallerFilePath] string sourceFilePath = "")
@@ -93,5 +101,68 @@ namespace UniLiquidLink
 
         [MenuItem("UniLiquidLink/Tests/Sample Server Stop (All Features Tour)", true)]
         public static bool ValidateStopAllFeaturesTour() { return IsSamplesAvailable(); }
+
+        // Reads PythonExeEnvVar and stores it under the shared PrefsKeyCommand so
+        // BuildCommand() picks it up. Logs an error and exits the batch process on
+        // failure instead of throwing, mirroring BatchModeIntegrationTest.StartServer.
+        static bool TrySetCommandFromPythonExeEnvVar()
+        {
+            string pythonExe = Environment.GetEnvironmentVariable(PythonExeEnvVar);
+            if (string.IsNullOrEmpty(pythonExe))
+            {
+                Debug.LogError("[SampleServerTest] " + PythonExeEnvVar + " is not set.");
+                EditorApplication.Exit(1);
+                return false;
+            }
+
+            EditorPrefs.SetString(UniLiquidLinkIntegrationTest.PrefsKeyCommand, pythonExe);
+            return true;
+        }
+
+        // Command-line entry point for starting the Cube Demo sample server without
+        // the Editor UI. Invoke via: -executeMethod UniLiquidLink.SampleServerTest.BatchStartCubeDemo
+        // Must be launched WITHOUT -quit; the Editor process stays alive to host the server.
+        public static void BatchStartCubeDemo()
+        {
+            // InvokeSampleServerMethod only logs an error and returns when the type is
+            // missing, which would let this method fall through to logging READY for a
+            // server that never started; guard explicitly instead.
+            if (!IsSamplesAvailable())
+            {
+                Debug.LogError("[SampleServerTest] UniLiquidLink.Samples is not available; import UniLiquidLink Samples first.");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            if (!TrySetCommandFromPythonExeEnvVar())
+            {
+                return;
+            }
+
+            StartCubeDemo();
+            Debug.Log("[SampleServerTest] CUBE_DEMO_READY");
+        }
+
+        // Command-line entry point for starting the All Features Tour sample server
+        // without the Editor UI. Invoke via:
+        // -executeMethod UniLiquidLink.SampleServerTest.BatchStartAllFeaturesTour
+        // Must be launched WITHOUT -quit; the Editor process stays alive to host the server.
+        public static void BatchStartAllFeaturesTour()
+        {
+            if (!IsSamplesAvailable())
+            {
+                Debug.LogError("[SampleServerTest] UniLiquidLink.Samples is not available; import UniLiquidLink Samples first.");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            if (!TrySetCommandFromPythonExeEnvVar())
+            {
+                return;
+            }
+
+            StartAllFeaturesTour();
+            Debug.Log("[SampleServerTest] ALL_FEATURES_TOUR_READY");
+        }
     }
 }
