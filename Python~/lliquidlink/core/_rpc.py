@@ -152,7 +152,7 @@ class JsonRpcPeer:
             await self._stream.send(encode_frame(msg, self._default))
             await slot.event.wait()
         if slot.error is not None:
-            raise slot.error
+            raise Exception(slot.error, f'{method}({params})')
         return slot.result
 
     async def notify(self, method: str, params: List[Any]) -> None:
