@@ -8,9 +8,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import argparse
+import time
 from typing import Optional
 
-from ..core import encode_frame, decode_frame
+from ..core import encode_frame, decode_frame, RpcTimingStats
 from .ipc_bridge import IpcBridge
 from .resolver import RpcNameResolver, TypeNameResolver
 from ._interfaces import MessageStream, RpcBridge
@@ -19,7 +20,7 @@ from ._transport import ServerTransport, TcpServerTransport
 logger = logging.getLogger(__name__)
 
 # Methods handled locally by the gateway; not forwarded to C#.
-_GATEWAY_METHODS = {"add_abbreviated_classes", "add_abbreviated_namespaces"}
+_GATEWAY_METHODS = {"add_abbreviated_classes", "add_abbreviated_namespaces", "get_rpc_timing_stats"}
 
 # Methods whose params carry a server-side resolution chain in params[0]["steps"].
 _CHAIN_METHODS = {"JsonRpc_ResolveChain", "JsonRpc_ResolveChainSet"}
@@ -65,7 +66,17 @@ async def _handle_client_messages(
     resolver: RpcNameResolver,
     type_resolver: Optional[TypeNameResolver] = None,
 ) -> None:
+    # RPC timing for this one external connection; always on (no per-connection
+    # opt-out on the server side), reset implicitly since it's created fresh here.
+    # Byte counting (record_bytes) covers every frame on this connection, including
+    # the gateway-local methods below; the time buckets (record) only cover the main
+    # forwarded-RPC branch further down, matching the existing rpc_count scope.
+    external_timing = RpcTimingStats(enabled=True)
+
     async for raw in ws:
+        request_start = time.perf_counter()
+        received_wall = time.time()
+        external_timing.record_bytes(received=len(raw))
         try:
             msg = decode_frame(raw)
             logger.debug("recv: %s", msg)
@@ -76,12 +87,31 @@ async def _handle_client_messages(
         msg_id = msg.get("id")
         method = msg.get("method", "")
         params = msg.get("params", [])
+        # Wall-clock send timestamp the client embedded (only present when the
+        # client has RPC timing enabled); used below for request_network_time
+        # and to decide whether to echo one back on the response.
+        sent_at = msg.get("sent_at")
+
+        if method == "get_rpc_timing_stats":
+            if msg_id is not None:
+                # Round-trips through the IPC leg (C# echoes "sent_at" on every response, so this
+                # call also exercises the same wire path being measured, same as any other RPC).
+                csharp_stats = await bridge.call("GetRpcTimingStats", [])
+                stats = {"external": external_timing.to_dict(), "ipc": bridge.timing_stats.to_dict(),
+                         "csharp": csharp_stats}
+                response = {"jsonrpc": "2.0", "id": msg_id, "result": stats}
+                frame = encode_frame(response)
+                external_timing.record_bytes(sent=len(frame))
+                await ws.send(frame)
+            continue
 
         if method == "add_abbreviated_classes":
             resolver.add_abbreviated_classes(params[0] if params else [])
             if msg_id is not None:
                 response = {"jsonrpc": "2.0", "id": msg_id, "result": None}
-                await ws.send(encode_frame(response))
+                frame = encode_frame(response)
+                external_timing.record_bytes(sent=len(frame))
+                await ws.send(frame)
             continue
 
         if method == "add_abbreviated_namespaces":
@@ -89,7 +119,9 @@ async def _handle_client_messages(
                 type_resolver.add_abbreviated_namespaces(params[0] if params else [])
             if msg_id is not None:
                 response = {"jsonrpc": "2.0", "id": msg_id, "result": None}
-                await ws.send(encode_frame(response))
+                frame = encode_frame(response)
+                external_timing.record_bytes(sent=len(frame))
+                await ws.send(frame)
             continue
 
         # Resolve short .NET type names in params before forwarding to C#.
@@ -113,6 +145,7 @@ async def _handle_client_messages(
             continue
 
         resolved = method if method in _SKIP_RESOLVE else resolver.resolve(method)
+        remote_start = time.perf_counter()
         try:
             logger.debug("bridge.call: %s(%s)", resolved, params)
             result = await bridge.call(resolved, params)
@@ -121,8 +154,30 @@ async def _handle_client_messages(
             response = {"jsonrpc": "2.0", "id": msg_id,
                         "error": {"code": -32603, "message": str(e)}}
             logger.exception("bridge.call error")
+        remote_elapsed = time.perf_counter() - remote_start
+        # Only echo "sent_at"/"received_at" back when the request carried a "sent_at":
+        # external_timing is always enabled on the gateway, so gating on that (rather
+        # than on whether the client actually opted in) would add new response fields
+        # for every client, including ones with RPC timing turned off.
+        if sent_at is not None:
+            response["sent_at"] = time.time()
+            response["received_at"] = received_wall
         logger.debug("send: %s", response)
-        await ws.send(encode_frame(response))
+        frame = encode_frame(response)
+        external_timing.record_bytes(sent=len(frame))
+        await ws.send(frame)
+        # local_processing_time = decode + name/type resolution + response encode +
+        # send, i.e. everything in this request's window except the bridge.call wait
+        # (remote_time). request_network_time covers the period strictly before
+        # request_start (client encode+send + wire transit + queueing until this frame
+        # was read), so unlike the two perf_counter buckets it is not derived from them.
+        # response_network_time stays 0.0: this leg has no way to measure the client's
+        # own receipt time of this response.
+        request_network_time = (received_wall - sent_at) if sent_at is not None else 0.0
+        external_timing.record(
+            local_processing_time=(time.perf_counter() - request_start) - remote_elapsed,
+            remote_time=remote_elapsed,
+            request_network_time=request_network_time)
 
 
 class Server:

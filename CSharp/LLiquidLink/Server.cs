@@ -103,12 +103,14 @@ namespace LLiquidLink
             Logger = CreateDefaultLogger();
             _dispatcher = dispatcher;
             MethodCaller caller = BuildCoreStack();
-            _transport = new StdioTransport(dispatcher, caller, _jsonChain.Options[(int)JsonSerializerChain.Stage.Main], () => Logger);
+            var stdio = new StdioTransport(dispatcher, caller, _jsonChain.Options[(int)JsonSerializerChain.Stage.Main], () => Logger);
+            _transport = stdio;
             Rpc.Register("OnServerError", (Action<string>)(msg =>
             {
                 Logger.Info("Python server error: " + msg);
                 OnServerError?.Invoke(msg);
             }));
+            Rpc.Register("GetRpcTimingStats", (Func<Dictionary<string, object>>)(() => stdio.Timing.ToDict()));
             WireTransportEvents();
             Initialize();
         }

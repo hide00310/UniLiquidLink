@@ -36,7 +36,12 @@ namespace LLiquidLink
         }
 
         // Build a framed JSON-RPC 2.0 response (4-byte little-endian length prefix + UTF-8 body).
-        public static byte[] BuildResponse(long id, object result, string error, JsonSerializerOptions opts)
+        // sentAt, when non-null, is echoed back as a "sent_at" field so the sender can measure wall-clock
+        // response transit time; only set when the request itself carried a "sent_at" (see StdioTransport.Dispatch).
+        // receivedAt, when non-null, is echoed back as a "received_at" field (the wall-clock instant this
+        // side finished receiving the request frame) so the sender can derive request_network_time/remote_time;
+        // follows the same "only when the request carried a sent_at" gating as sentAt.
+        public static byte[] BuildResponse(long id, object result, string error, JsonSerializerOptions opts, double? sentAt = null, double? receivedAt = null)
         {
             string resultJson;
             if (result == null)
@@ -52,9 +57,11 @@ namespace LLiquidLink
                 resultJson = JsonSerializer.Serialize(result, opts);
             }
 
+            string sentAtField = sentAt.HasValue ? ",\"sent_at\":" + JsonSerializer.Serialize(sentAt.Value) : "";
+            string receivedAtField = receivedAt.HasValue ? ",\"received_at\":" + JsonSerializer.Serialize(receivedAt.Value) : "";
             string body = error == null
-                ? "{\"jsonrpc\":\"2.0\",\"id\":" + id.ToString() + ",\"result\":" + resultJson + "}"
-                : "{\"jsonrpc\":\"2.0\",\"id\":" + id.ToString() + ",\"error\":{\"code\":-32603,\"message\":" + JsonSerializer.Serialize(error) + "}}";
+                ? "{\"jsonrpc\":\"2.0\",\"id\":" + id.ToString() + ",\"result\":" + resultJson + sentAtField + receivedAtField + "}"
+                : "{\"jsonrpc\":\"2.0\",\"id\":" + id.ToString() + ",\"error\":{\"code\":-32603,\"message\":" + JsonSerializer.Serialize(error) + "}" + sentAtField + receivedAtField + "}";
             return WrapFrame(Encoding.UTF8.GetBytes(body));
         }
     }

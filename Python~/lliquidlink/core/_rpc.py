@@ -9,12 +9,14 @@ from __future__ import annotations
 import json
 import struct
 import sys
+import time
 from typing import Any, BinaryIO, Callable, Dict, List, Optional, Union
 
 import anyio
 from anyio.streams.buffered import BufferedByteReceiveStream
 
 from ._interfaces import ByteStream
+from ._timing import RpcTimingStats
 
 import logging
 logger = logging.getLogger(__name__)
@@ -57,12 +59,30 @@ def decode_frame(raw: Union[bytes, str]) -> Dict[str, Any]:
 
 class _Slot:
     """Pending-request slot: an event plus the resolved result or error."""
-    __slots__ = ("event", "result", "error")
+    __slots__ = ("event", "result", "error", "sent_at",
+                 "response_network_time", "request_network_time",
+                 "remote_time", "decode_time")
 
     def __init__(self) -> None:
         self.event: anyio.Event = anyio.Event()
         self.result = None
         self.error: Optional[Exception] = None
+        # This request's own `sent_at` (the local send timestamp), stashed
+        # here so `_dispatch` can pair it with the response's echoed
+        # `received_at` to derive `request_network_time`.
+        self.sent_at: Optional[float] = None
+        # Wall-clock network transit times, set in `_dispatch` from the
+        # response's echoed `sent_at`/`received_at`; stay 0.0 when the peer
+        # does not echo them back (i.e. the original request had no `sent_at`).
+        self.response_network_time: float = 0.0
+        self.request_network_time: float = 0.0
+        # Time the peer spent between receiving the request and sending the
+        # response, derived in `_dispatch` from the response's own
+        # `sent_at`/`received_at` pair (same-process clock, no skew).
+        self.remote_time: float = 0.0
+        # Time spent decoding the response frame in `serve()`; folded into
+        # `local_processing_time` by `request()`.
+        self.decode_time: float = 0.0
 
 
 class JsonRpcPeer:
@@ -77,6 +97,7 @@ class JsonRpcPeer:
         stream: ByteStream,
         default: Optional[Callable[[Any], Any]] = None,
         object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+        timing: Optional[RpcTimingStats] = None,
     ):
         self._stream: ByteStream = stream
         self._reader: BufferedByteReceiveStream = BufferedByteReceiveStream(stream)
@@ -85,13 +106,26 @@ class JsonRpcPeer:
         self._next_id: int = 1
         self._pending: Dict[int, _Slot] = {}
         self._closed: bool = False
+        # Per-connection RPC timing; disabled by default unless the caller opts in.
+        self.timing: RpcTimingStats = timing if timing is not None else RpcTimingStats()
 
     @property
     def closed(self) -> bool:
         return self._closed
 
     async def request(self, method: str, params: List[Any]):
-        """Send a request and await its response."""
+        """Send a request and await its response.
+
+        When `self.timing` is enabled, records this RPC's local processing
+        time (frame building + response decoding), remote time (the peer's
+        own processing), and wall-clock network transit times (from which
+        `communication_time` is derived), plus wire byte counts. A
+        `"sent_at"` timestamp is embedded in the outgoing message so the
+        receiver can measure its own request-side transit time and echo back
+        `"received_at"`/`"sent_at"` on the response; this only happens when
+        timing is enabled, so the payload is unchanged when the feature is
+        off.
+        """
         if self._closed:
             raise ConnectionClosedError("Not connected")
         call_id = self._next_id
@@ -99,10 +133,24 @@ class JsonRpcPeer:
         slot = _Slot()
         self._pending[call_id] = slot
         logger.debug("request %s %s", method, params)
-        await self._stream.send(encode_frame(
-            {"jsonrpc": "2.0", "id": call_id, "method": method, "params": params},
-            self._default))
-        await slot.event.wait()
+        msg = {"jsonrpc": "2.0", "id": call_id, "method": method, "params": params}
+        if self.timing.enabled:
+            local_start = time.perf_counter()
+            msg["sent_at"] = time.time()      # closes the local window here
+            slot.sent_at = msg["sent_at"]
+            local_elapsed = time.perf_counter() - local_start
+            frame = encode_frame(msg, self._default)   # encoding belongs to request_network_time
+            self.timing.record_bytes(sent=len(frame))
+            await self._stream.send(frame)
+            await slot.event.wait()
+            self.timing.record(
+                local_processing_time=local_elapsed + slot.decode_time,
+                remote_time=slot.remote_time,
+                response_network_time=slot.response_network_time,
+                request_network_time=slot.request_network_time)
+        else:
+            await self._stream.send(encode_frame(msg, self._default))
+            await slot.event.wait()
         if slot.error is not None:
             raise slot.error
         return slot.result
@@ -112,8 +160,10 @@ class JsonRpcPeer:
         if self._closed:
             raise ConnectionClosedError("Not connected")
         logger.debug("notify %s %s", method, params)
-        await self._stream.send(encode_frame(
-            {"jsonrpc": "2.0", "method": method, "params": params}, self._default))
+        frame = encode_frame(
+            {"jsonrpc": "2.0", "method": method, "params": params}, self._default)
+        self.timing.record_bytes(sent=len(frame))
+        await self._stream.send(frame)
 
     async def serve(self) -> None:
         """Receive loop: resolve pending requests; ignore inbound notifications."""
@@ -125,11 +175,21 @@ class JsonRpcPeer:
                     body = await self._reader.receive_exactly(length)
                 except _STREAM_END:
                     break
-                self._dispatch(json.loads(body, object_hook=self._object_hook))
+                received_at = time.time()
+                self.timing.record_bytes(received=4 + length)
+                decode_start = time.perf_counter()
+                msg = json.loads(body, object_hook=self._object_hook)
+                decode_time = time.perf_counter() - decode_start
+                self._dispatch(msg, received_at, decode_time)
         finally:
             self._reject_all(ConnectionClosedError("Connection closed"))
 
-    def _dispatch(self, msg: Dict[str, Any]) -> None:
+    def _dispatch(
+        self,
+        msg: Dict[str, Any],
+        received_at: Optional[float] = None,
+        decode_time: float = 0.0,
+    ) -> None:
         msg_id = msg.get("id")
         if msg_id is None:
             return  # notification / server push: ignored (parity with prior behavior)
@@ -143,6 +203,19 @@ class JsonRpcPeer:
             slot.error = RpcError(message)
         else:
             slot.result = msg.get("result")
+        slot.decode_time = decode_time
+        # Correlate the embedded timestamps with THIS specific slot (found via the
+        # msg_id lookup above), not a peer-level shared variable: with multiple requests
+        # in flight, serve() can process another frame before request() next runs, so a
+        # shared "last received_at" would risk being overwritten before it's read.
+        resp_sent_at = msg.get("sent_at")
+        resp_received_at = msg.get("received_at")
+        if resp_sent_at is not None and received_at is not None:
+            slot.response_network_time = received_at - resp_sent_at
+        if resp_received_at is not None and slot.sent_at is not None:
+            slot.request_network_time = resp_received_at - slot.sent_at
+        if resp_sent_at is not None and resp_received_at is not None:
+            slot.remote_time = resp_sent_at - resp_received_at
         slot.event.set()
 
     def _reject_all(self, error: Exception) -> None:

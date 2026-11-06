@@ -11,7 +11,7 @@ import asyncio
 import anyio
 import anyio.abc
 
-from ..core import ByteStream, JsonRpcPeer, StdioByteStream
+from ..core import ByteStream, JsonRpcPeer, RpcTimingStats, StdioByteStream
 from ._interfaces import Transport
 from typing import Any, Awaitable, Callable, Coroutine, Dict, List, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -40,6 +40,10 @@ class StreamTransport(Transport):
         self._serve_task: Optional["asyncio.Task[None]"] = None
         self._default: Optional[Callable[[Any], Any]] = None
         self._object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None
+        # RPC timing for the current connection; persists across reconnects so
+        # `enabled` survives open()/aclose() cycles, but its totals are reset
+        # on each open() (one connection's worth of stats at a time).
+        self.timing: RpcTimingStats = RpcTimingStats()
 
     def bind_codec(self, serialization : Serialization) -> None:
         """Set the json.dumps default / json.loads object_hook used by the peer."""
@@ -48,7 +52,8 @@ class StreamTransport(Transport):
 
     async def open(self) -> None:
         stream = await self._open()
-        self._peer = JsonRpcPeer(stream, self._default, self._object_hook)
+        self.timing.reset()
+        self._peer = JsonRpcPeer(stream, self._default, self._object_hook, timing=self.timing)
         self._serve_task = asyncio.ensure_future(self._peer.serve())
 
     async def aclose(self) -> None:

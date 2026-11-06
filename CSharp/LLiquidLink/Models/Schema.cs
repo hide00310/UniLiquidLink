@@ -42,6 +42,7 @@ namespace LLiquidLink
         public long? id { get; set; }
         public string method { get; set; }
         public System.Text.Json.JsonElement[] @params { get; set; }
+        public double? sent_at { get; set; }
     }
 
     public partial class RpcResolveChainParam

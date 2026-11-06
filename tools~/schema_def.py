@@ -40,6 +40,9 @@ class RpcRequest(B):
     method: str
     id: Optional[int] = None
     params: List[Any]
+    # Wall-clock (time.time()) send timestamp, embedded only when the sender has RPC timing
+    # enabled; echoed back on the response so the sender can measure round-trip network transit.
+    sent_at: Optional[float] = None
 
 class RpcResolveChainParam(B):
     obj: Any

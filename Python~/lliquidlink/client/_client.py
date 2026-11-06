@@ -8,6 +8,7 @@ import anyio
 
 from ._event import Event
 from ._identity_cache import ObjectIdentityCache
+from ._options import ClientOptions
 from ._proxy import ObjectProxy, PropertyProxy
 from ._release import ReleaseManager
 from ._serialization import Serialization
@@ -29,6 +30,8 @@ class Client:
         transport.bind_codec(self._serialization)
         self._release: ReleaseManager = ReleaseManager(transport, verify=verify_releases)
         self.on_execute: Event = Event()
+        # Optional client features (e.g. RPC timing); see options.rpc_timing.
+        self.options: ClientOptions = ClientOptions(transport)
 
     # ── RPC dispatch ─────────────────────────────────────────────────────────
 
