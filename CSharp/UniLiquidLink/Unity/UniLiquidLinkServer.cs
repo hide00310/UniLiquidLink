@@ -89,6 +89,30 @@ namespace UniLiquidLink
             _pythonServerStartCommand = pythonServerStartCommand;
         }
 
+        /// <summary>
+        /// How long the main-thread drain waits for the next RPC before yielding back to the Editor
+        /// (forwards to <see cref="MainThreadDispatcher.IdleWaitMilliseconds"/>). Raising it keeps the drain
+        /// alive across client-side pauses longer than the default, at the cost of the Editor staying frozen
+        /// that much longer after traffic stops. Reads 0 and ignores writes when the injected dispatcher is
+        /// not a <see cref="MainThreadDispatcher"/>.
+        /// </summary>
+        public int DispatcherIdleWaitMilliseconds
+        {
+            get
+            {
+                var dispatcher = _dispatcher as MainThreadDispatcher;
+                return dispatcher != null ? dispatcher.IdleWaitMilliseconds : 0;
+            }
+            set
+            {
+                var dispatcher = _dispatcher as MainThreadDispatcher;
+                if (dispatcher != null)
+                {
+                    dispatcher.IdleWaitMilliseconds = value;
+                }
+            }
+        }
+
         // ─── Lifecycle ───────────────────────────────────────────────────────────
 
         /// <summary>Start the server, launching the Python middleware first when running in stdio mode.</summary>
