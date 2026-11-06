@@ -118,6 +118,68 @@ public class MethodCallerSerializationTests
         finally { UnityEngine.Object.DestroyImmediate(go); }
     }
 
+    // Wire JSON for a registered instance, as the client sends it.
+    static string RpcInstanceJson(long id, string name)
+    {
+        return $@"{{""rpcType"":""{typeof(RpcInstanceObject).FullName}"",""instanceId"":{id},""orgType"":""UnityEngine.GameObject"",""name"":""{name}""}}";
+    }
+
+    [Test]
+    public void Dispatch_ObjectArray_ResolvesInstancesFromRegistry()
+    {
+        var go0 = new GameObject("__DispatchObjArr0");
+        var go1 = new GameObject("__DispatchObjArr1");
+        try
+        {
+            long id0 = _registry.RegisterObject(go0);
+            long id1 = _registry.RegisterObject(go1);
+            object[] captured = null;
+            _rpc.Register("id_obj_array", (Func<object[], int>)(o => { captured = o; return 0; }));
+            DispatchSync("id_obj_array",
+                $"[{RpcInstanceJson(id0, "__DispatchObjArr0")},{RpcInstanceJson(id1, "__DispatchObjArr1")}]");
+            Assert.AreEqual(2, captured.Length);
+            Assert.AreSame(go0, captured[0]);
+            Assert.AreSame(go1, captured[1]);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(go0);
+            UnityEngine.Object.DestroyImmediate(go1);
+        }
+    }
+
+    [Test]
+    public void Dispatch_ObjectArray_AllPrimitives_ReadsRaw()
+    {
+        object[] captured = null;
+        _rpc.Register("id_obj_array_prim", (Func<object[], int>)(o => { captured = o; return 0; }));
+        DispatchSync("id_obj_array_prim", @"[1, 2.5, ""s"", true]");
+        Assert.AreEqual(4, captured.Length);
+        Assert.AreEqual(1L, captured[0]);
+        Assert.AreEqual(2.5d, captured[1]);
+        Assert.AreEqual("s", captured[2]);
+        Assert.AreEqual(true, captured[3]);
+    }
+
+    [Test]
+    public void Dispatch_ObjectArray_UnknownInstanceId_Throws()
+    {
+        _rpc.Register("id_obj_array_unknown", (Func<object[], int>)(o => 0));
+        Assert.Throws<RpcJsonConverterReadException>(
+            () => DispatchSync("id_obj_array_unknown", $"[{RpcInstanceJson(999999, "__Missing")}]"));
+    }
+
+    [Test]
+    public void Dispatch_JsonElementArray_PassesThrough()
+    {
+        JsonElement[] captured = null;
+        _rpc.Register("id_json_elem_array", (Func<JsonElement[], int>)(e => { captured = e; return 0; }));
+        DispatchSync("id_json_elem_array", @"[{""x"":1.0,""y"":2.0,""z"":3.0}]");
+        Assert.AreEqual(1, captured.Length);
+        Assert.AreEqual(1.0f, captured[0].GetProperty("x").GetSingle(), 0.001f);
+        Assert.AreEqual(3.0f, captured[0].GetProperty("z").GetSingle(), 0.001f);
+    }
+
     [Test]
     public void Dispatch_ObjectPrimitiveInt_FallsThroughToRawNumber()
     {

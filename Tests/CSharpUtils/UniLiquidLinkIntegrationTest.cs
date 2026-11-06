@@ -41,6 +41,7 @@ namespace UniLiquidLink
             server.Rpc.AddRpcMethod((Func<object, object>)SamplePrimitiveObject);
             server.Rpc.AddRpcMethod((Func<Vector3, Vector3>)SampleVector3);
             server.Rpc.AddRpcMethod((Func<GameObject[], GameObject[]>)SampleGameObjectArray);
+            server.Rpc.AddRpcMethod((Func<object[], string[]>)SampleObjectArray);
             server.Rpc.AddRpcMethod((Func<List<GameObject>, List<GameObject>>)SampleGameObjectList);
             server.Rpc.AddRpcMethod((Func<Dictionary<string, GameObject>, Dictionary<string, GameObject>>)SampleGameObjectDict);
             server.Rpc.AddRpcMethod((Func<Vector3[], Vector3[]>)SampleVector3Array);
@@ -110,6 +111,20 @@ namespace UniLiquidLink
         {
             Debug.LogError($"Call SampleGameObject {x}");
             return x;
+        }
+
+        // Reports what each element of an `object[]` parameter actually deserialized to. Echoing the
+        // array back would not show that: the pre stage resolves registered instances element by
+        // element, so what matters is the runtime type each element arrived as, not the wire shape.
+        public string[] SampleObjectArray(object[] x)
+        {
+            Debug.LogError($"Call SampleObjectArray {x}");
+            var ret = new string[x.Length];
+            for (int i = 0; i < x.Length; i++)
+            {
+                ret[i] = x[i] == null ? "null" : $"{x[i].GetType().FullName}:{x[i]}";
+            }
+            return ret;
         }
         public List<GameObject> SampleGameObjectList(List<GameObject> x)
         {

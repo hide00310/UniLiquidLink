@@ -67,6 +67,13 @@ class IntegrationClient(Client):
         go = self.Find("UniLiquidLinkTestObject")
         return self._try(lambda: self.SampleGameObjectArray([go, go]))
 
+    def run_sample_object_array_instances(self):
+        go = self.Find("UniLiquidLinkTestObject")
+        return self._try(lambda: self.SampleObjectArray([go, go]))
+
+    def run_sample_object_array_primitives(self):
+        return self._try(lambda: self.SampleObjectArray([1, 2.5, "s", True]))
+
     def run_sample_game_object_dict(self):
         go = self.Find("UniLiquidLinkTestObject")
         return self._try(lambda: self.SampleGameObjectDict({"a": go, "b": go}))

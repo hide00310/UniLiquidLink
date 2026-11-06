@@ -169,6 +169,42 @@ public class JsonSerializerChainTests
     }
 
     [Test]
+    public void Deserialize_PreArrayWithElementConverter_ResolvesViaElementConverter()
+    {
+        var log = new List<string>();
+        var marker = new Marker();
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Pre, "pre", log, onRead: () => marker);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => throw new InvalidOperationException("main should not run"));
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
+
+        var result = (Marker[])chain.Deserialize("[{},{}]", typeof(Marker[]));
+
+        Assert.AreEqual(2, result.Length);
+        Assert.AreSame(marker, result[0]);
+        Assert.AreSame(marker, result[1]);
+        // Pre's resolver accepts Marker[] because Marker has a converter, so the standard
+        // array converter's element loop reaches it once per element.
+        CollectionAssert.AreEqual(new[] { "pre", "pre" }, log);
+    }
+
+    [Test]
+    public void Deserialize_PreArrayWithoutElementConverter_FallsThroughToMain()
+    {
+        var log = new List<string>();
+        var marker = new Marker();
+        var chain = new JsonSerializerChain();
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Main, "main", log, onRead: () => marker);
+        AddScriptedConverter(chain, JsonSerializerChain.Stage.Fallback, "fallback", log, onRead: () => throw new InvalidOperationException("fallback should not run"));
+
+        var result = (Marker[])chain.Deserialize("[{}]", typeof(Marker[]));
+
+        Assert.AreEqual(1, result.Length);
+        Assert.AreSame(marker, result[0]);
+        CollectionAssert.AreEqual(new[] { "main" }, log);
+    }
+
+    [Test]
     public void Deserialize_JsonElementTargetType_DoesNotThrow()
     {
         var chain = new JsonSerializerChain();
