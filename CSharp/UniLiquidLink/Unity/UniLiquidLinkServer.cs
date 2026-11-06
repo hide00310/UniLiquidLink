@@ -167,7 +167,7 @@ namespace UniLiquidLink
 
         private void AddUniConverters()
         {
-            Rpc.AddConverterAndRegister(_jsonChain.Options[(int)JsonSerializerChain.Stage.Main], new UnityObjectConverter(_registry));
+            Rpc.AddConverterAndRegister(_jsonChain.Options[(int)JsonSerializerChain.Stage.Main], new UnityObjectConverter(_registry, new UnityObjectNullChecker()));
             Rpc.AddConverter(_jsonChain.Options[(int)JsonSerializerChain.Stage.Fallback], new JsonUtilityConverterFactory());
         }
 

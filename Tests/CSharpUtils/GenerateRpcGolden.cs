@@ -88,6 +88,13 @@ public static class GenerateRpcGolden
         string r9 = ctx.SendAndGetResponse(req9Get);
         WriteGolden(goldenDir, "golden_resolve_chain_set_position", r9);
 
+        // 10. ResolveChain: go → GetComponent(Camera) on a Cube (component missing → Unity fake-null → JSON null)
+        string req10 = string.Format(
+            @"{{""jsonrpc"":""2.0"",""id"":11,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""GetComponent"",""args"":[{{""rpcType"":1,""value"":""UnityEngine.Camera""}}]}}]}}",
+            goRpcObj);
+        string r10 = ctx.SendAndGetResponse(req10);
+        WriteGolden(goldenDir, "golden_resolve_chain_get_component_missing", r10);
+
         AssetDatabase.Refresh();
         Debug.Log("[GenerateRpcGolden] Done. Files written to: " + goldenDir);
     }
