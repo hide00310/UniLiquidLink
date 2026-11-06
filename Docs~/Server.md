@@ -36,6 +36,19 @@ Identifies a stage in the pre/main/fallback (de)serialization chain.
 
 Type resolver for the pre stage: resolves only types with an explicitly registered converter, so any other type fails immediately and falls through to the main stage.
 
+### Methods
+- `HasConverter(Type, JsonSerializerOptions)` — True when the type itself has a registered converter, or is an array whose element type has one (so the array's element loop can reach that converter).
+
+---
+
+## IRpcNullChecker`1
+*Namespace: LLiquidLink*
+
+Strategy injected into a converter (constructor injection) that defines what counts as "null" for the converter's original type. Needed for types whose null-ness is not reference equality (e.g. Unity's destroyed / fake-null objects). Contravariant, so a checker for a base type can be injected into a converter of a derived type.
+
+### Methods
+- `IsNull(`0)` — Return `true` if `value` must be written as JSON null.
+
 ---
 
 ## RpcJsonConverter`2
@@ -159,9 +172,10 @@ Routes incoming JSON-RPC calls to handlers looked up via a RpcSearcher, deserial
 
 ### Methods
 - `BuildCandidateArgs(MethodCandidate, JsonElement[])` — Build the call-argument array for a single overload candidate, throwing if the JSON arguments don't fit.
-- `CallCandidates(string, IList{MethodCandidate}, JsonElement[])` — Try each overload candidate in order; invoke the first whose arguments deserialize successfully.
+- `CallCandidates(string, IList{MethodCandidate}, JsonElement[], RpcStageTimings)` — Try each overload candidate in order; invoke the first whose arguments deserialize successfully.
 - `CallDirectWithObj(object, string, JsonElement[])` — Invoke a directly-registered method on a pre-deserialized instance. Called from chain resolution on the main thread.
 - `Call(string, JsonElement[])` — Dispatch a registered RPC method by name with the given JSON arguments.
+- `Call(string, JsonElement[], RpcStageTimings)` — Dispatch a registered RPC method by name with the given JSON arguments, optionally recording this call's stage breakdown (resolve/deserialize/invoke/serialize/overload attempts).
 - `BuildInstanceCallArgs(object, JsonElement[], ParameterInfo[])` — Build the full argument array for an instance method call, filling defaults for omitted params.
 - `DeserializeArgs(JsonElement[], ParameterInfo[])` — Deserialize a JSON argument array, filling defaults for omitted trailing parameters.
 - `TryGetDefaultValue(ParameterInfo, Object@)` — Try to get the default value for a parameter from its attributes or compile-time default.
@@ -314,6 +328,40 @@ Describes one overload candidate of an RPC method: how to build its arguments an
 
 ---
 
+## RpcStageTimings
+*Namespace: LLiquidLink*
+
+Accumulator for one RPC call's RpcStageTimings) stage breakdown, in seconds. Passed in by the caller (e.g. StdioTransport) and read back afterward; MethodCaller only ever writes to it, never reads it.
+
+### Methods
+- `ResolveTime` — Time spent resolving the RPC method name to overload candidates.
+- `DeserializeArgsTime` — Time spent deserializing JSON arguments into call arguments, including failed overload attempts.
+- `InvokeTime` — Time spent inside the resolved method itself (pure handler execution).
+- `SerializeResultTime` — Time spent serializing the method's return value to a JsonElement.
+- `OverloadAttempts` — Number of overload candidates whose argument deserialization was attempted.
+
+---
+
+## RpcTimingStats
+*Namespace: LLiquidLink*
+
+Tracks one stdio connection's RPC timing: request count, the local/communication/remote breakdown of total_time, wall-clock network transit times, per-stage breakdown of local processing, and wire byte volume. Mirrors the Python-side `RpcTimingStats` (`Python~/lliquidlink/core/_timing.py`) for the gateway<->Unity IPC leg; see that module's docstring for the shared `total_time = local_processing_time + communication_time + remote_time` model and the clock-skew cancellation argument. C# only ever plays the JSON-RPC server role on this leg (it never issues its own outbound request and awaits a reply), so !:RemoteTime is always 0.0 and !:CommunicationTime (derived, like the Python side) always equals !:RequestNetworkTime. !:BytesSent/!:BytesReceived count every frame that crosses the wire, including notifications, so they do not correlate 1:1 with !:RpcCount. A single instance is only ever touched from the main thread inside the transport's dispatch method (the "single event loop" equivalent of the Python design); it is not safe to share across threads.
+
+### Constructors
+- `__init__(bool)` — Create a stats tracker, initially with all counters at zero.
+
+### Properties
+- `Enabled` — When false, Double)/Double)/Int64) are no-ops.
+
+### Methods
+- `Record(double, double, double, double)` — Add one completed request/response cycle's timing to the running totals; no-op when disabled.
+- `RecordStages(RpcStageTimings, double, double, double, double)` — Add one request's stage breakdown to the running totals; no-op when disabled. Additive only (does not touch !:RpcCount, which Double) owns).
+- `RecordBytes(long, long)` — Add wire byte counts to the running totals; no-op when disabled. Does not touch !:RpcCount: called for every frame on the wire (including notifications), not just completed request/response cycles.
+- `Reset` — Clear accumulated totals for a new connection; keeps Enabled.
+- `ToDict` — Return the current stats as a plain dict, key-compatible with the Python side's `to_dict()`, plus this leg's stage breakdown. `communication_time` is derived (`request_network_time + response_network_time`), not stored, matching the Python side.
+
+---
+
 ## IExecutorServer
 *Namespace: LLiquidLink*
 
@@ -418,6 +466,7 @@ Reads JSON-RPC requests from the Python middleware's stdio streams with 4-byte l
 - `__init__(IMainThreadDispatcher, MethodCaller, JsonSerializerOptions, Func{ILogger})` — Initialize StdioTransport with its dependencies. Call Stream) before Start.
 
 ### Properties
+- `Timing` — RPC timing/byte-volume stats for this stdio connection (gateway leg of the IPC hop).
 - `ClientId`
 
 ### Methods
@@ -448,16 +497,42 @@ Delegates single-value (de)serialization to Unity's JsonUtility, bridging System
 
 ---
 
+## UnityObjectNullChecker
+*Namespace: UniLiquidLink*
+
+Null checker for Object values, meant to be injected into UnityObjectConverter. Uses Unity's overloaded `==`, so destroyed objects and the "fake null" returned by e.g. `GetComponent` for a missing component count as null although they are not reference-null.
+
+### Methods
+- `IsNull(Object)` — Whether `value` is a destroyed or fake-null Unity object.
+
+---
+
+## InstanceObjectConverter`1
+*Namespace: UniLiquidLink*
+
+Converter that maps live object instances to RpcInstanceObject descriptors via the shared registry. An injected IRpcNullChecker`1 can widen what is written as JSON null.
+
+### Constructors
+- `__init__(ObjectRegistry, IRpcNullChecker{`0})` — Initialize the converter with its registry and an optional null checker.
+
+### Methods
+- `_nullChecker` — Optional injected null definition; `null` means only reference-null is written as JSON null.
+
+---
+
 ## MainThreadDispatcher
 *Namespace: UniLiquidLink*
 
-Drains an action queue on Unity's main thread via update.
+Drains an action queue on Unity's main thread. Registered with update, but once a drain starts it keeps hold of the main thread for as long as new actions keep arriving (bounded by IdleWaitMilliseconds) instead of handling one tick's worth and yielding. This removes the per-RPC wait for the next Editor tick during a burst of sequential RPC traffic.
+
+### Properties
+- `IdleWaitMilliseconds` — How long a drain keeps the main thread waiting for the next action before yielding back to the Editor. The RPC peer turns a response around in roughly 1.5ms, so any value above that keeps a whole burst inside a single drain; the Editor stays frozen for that burst and recovers this long after traffic stops. Set to 0 to restore the previous one-drain-per-tick behaviour.
 
 ### Methods
 - `Enqueue(Action)` — Enqueue `action` for execution on the main thread.
 - `Start` — Register the drain loop with update.
 - `Stop` — Unregister the drain loop from update.
-- `ProcessAll` — Dequeue and invoke all pending actions in the current update tick. Each action is isolated so one throwing does not prevent the rest of the tick's actions from running.
+- `ProcessAll` — Dequeue and invoke every pending action, then hold the main thread here waiting up to IdleWaitMilliseconds for the next one, repeating until that wait times out. Each action is isolated so one throwing does not stop the rest. Returns immediately when the queue is empty (an idle Editor pays nothing) or when a drain is already running on this thread.
 
 ---
 
@@ -469,6 +544,9 @@ Unity-specific entry point for the WebSocket-RPC stack; adds Python-middleware p
 ### Constructors
 - `__init__(string)` — Production constructor; starts Python middleware and communicates via stdio.
 - `__init__(string, ITransportServer, IMainThreadDispatcher)` — Injection constructor for unit tests: accepts a pre-wired transport and dispatcher.
+
+### Properties
+- `DispatcherIdleWaitMilliseconds` — How long the main-thread drain waits for the next RPC before yielding back to the Editor (forwards to IdleWaitMilliseconds). Raising it keeps the drain alive across client-side pauses longer than the default, at the cost of the Editor staying frozen that much longer after traffic stops. Reads 0 and ignores writes when the injected dispatcher is not a MainThreadDispatcher.
 
 ### Methods
 - `CreateDefaultLogger`
@@ -500,9 +578,9 @@ Default logger that forwards all messages to `UnityEngine.Debug.LogError`.
 ## UnityObjectConverter
 *Namespace: UniLiquidLink*
 
-JSON converter for the base Object type, via the shared registry-lookup logic in InstanceObjectConverter`1.
+JSON converter for the base Object type, via the shared registry-lookup logic in InstanceObjectConverter`1. The injected IRpcNullChecker`1 (normally UnityObjectNullChecker) makes destroyed / fake-null objects (e.g. the result of `GetComponent` for a missing component) be written as JSON null instead of an object descriptor.
 
 ### Constructors
-- `__init__(ObjectRegistry)` — Initialize the converter with the registry used for instance ID lookups.
+- `__init__(ObjectRegistry, IRpcNullChecker{Object})` — Initialize the converter with the registry used for instance ID lookups and the null definition to apply.
 
 ---

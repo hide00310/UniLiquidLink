@@ -20,7 +20,7 @@ Raised when the server returns a JSON-RPC error response.
 JSON-RPC 2.0 over a bidirectional byte stream with 4-byte length framing.
 
 ### Constructors
-- `__init__(stream: ByteStream, default: Optional[Callable[[Any], Any]]=None, object_hook: Optional[Callable[[Dict[str, Any]], Any]]=None)`
+- `__init__(stream: ByteStream, default: Optional[Callable[[Any], Any]]=None, object_hook: Optional[Callable[[Dict[str, Any]], Any]]=None, timing: Optional[RpcTimingStats]=None)`
 
 ### Properties
 - `closed`
@@ -73,6 +73,22 @@ Bidirectional byte stream: anything with async send/receive/aclose.
 
 ---
 
+## RpcTimingStats
+*Module: lliquidlink.core._timing*
+
+Tracks one connection's RPC timing: total RPC count, accumulated local
+
+### Constructors
+- `__init__(enabled: bool=False)`
+
+### Methods
+- `record(local_processing_time: float, remote_time: float=0.0, response_network_time: float=0.0, request_network_time: float=0.0)` — Add one RPC's timing to the running totals; no-op when disabled.
+- `record_bytes(sent: int=0, received: int=0)` — Add wire byte counts to the running totals; no-op when disabled.
+- `reset()` — Clear accumulated totals for a new connection; keeps `enabled`.
+- `to_dict()` — Return the current stats as a plain dict.
+
+---
+
 ## Client
 *Module: lliquidlink.client._client*
 
@@ -102,7 +118,7 @@ Client that connects to a Unity Editor server and sends RPC commands.
 Proxy for a live Unity object; attribute access builds RPC chains.
 
 ### Constructors
-- `__init__(data: Dict[str, Any], transport: Transport, track: Callable[[ObjectProxy, Dict[str, Any]], None], make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy])`
+- `__init__(data: Dict[str, Any], transport: Transport, track: Callable[[ObjectProxy], None], make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy])`
 
 ### Methods
 - `__getattr__(name: str)`
@@ -191,6 +207,19 @@ A list of callbacks invoked in registration order when called.
 
 ---
 
+## ObjectIdentityCache
+*Module: lliquidlink.client._identity_cache*
+
+Weakly-referenced instanceId -> ObjectProxy map.
+
+### Constructors
+- `__init__()`
+
+### Methods
+- `get_or_create(data: Dict[str, Any], factory: Callable[[Dict[str, Any]], 'ObjectProxy'])` — Return the live proxy for data's instanceId, creating one via factory on a miss.
+
+---
+
 ## Transport
 *Module: lliquidlink.client._interfaces*
 
@@ -217,6 +246,33 @@ Anything exposing `_asdict()` for wire encoding (e.g. ObjectProxy).
 
 ---
 
+## RpcTimingOption
+*Module: lliquidlink.client._options*
+
+RPC timing feature: enable/disable and combined stats retrieval in one class.
+
+### Constructors
+- `__init__(transport: Transport)`
+
+### Properties
+- `enabled`
+
+### Methods
+- `enabled(value: bool)`
+- `to_dict()` — Return client-side stats plus the server's stats for this connection.
+
+---
+
+## ClientOptions
+*Module: lliquidlink.client._options*
+
+Container for optional Client features; add new feature toggles here.
+
+### Constructors
+- `__init__(transport: Transport)`
+
+---
+
 ## ReleaseManager
 *Module: lliquidlink.client._release*
 
@@ -226,7 +282,7 @@ Tracks GC'd ObjectProxy instances and batches their release over RPC.
 - `__init__(transport: Transport, verify: bool=False)`
 
 ### Methods
-- `track(proxy, data: Dict[str, Any])` — Schedule a release when `proxy` is garbage-collected.
+- `track(proxy)` — Schedule a release when `proxy` is garbage-collected.
 - `flush_async()`
 - `flush()` — Send pending object releases now (callable from a worker thread).
 
@@ -276,6 +332,9 @@ Talks to the C# Unity process over stdio using the shared JSON-RPC core.
 
 ### Constructors
 - `__init__(stream: Optional[ByteStream]=None)`
+
+### Properties
+- `timing_stats` — RPC timing stats for the server↔C# IPC leg.
 
 ### Methods
 - `connect()` — Start the background loop that reads C# responses from stdin.
