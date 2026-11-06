@@ -53,6 +53,10 @@ async def test_nested_static_class(client):
     assert_golden("nested_static_class", await client._exec(IntegrationClient.run_nested_static_class))
 
 @pytest.mark.asyncio(loop_scope="session")
+async def test_object_identity_dedup(client):
+    assert_golden("object_identity_dedup", await client._exec(IntegrationClient.run_object_identity_dedup))
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_object_method(client):
     assert_golden("object_method", await client._exec(IntegrationClient.run_object_method))
 

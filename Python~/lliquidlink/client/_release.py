@@ -1,11 +1,13 @@
 """Batches Unity object-release notifications triggered by Python GC."""
 from __future__ import annotations
 import functools
+import itertools
 import threading
 import weakref
-from typing import Any, Callable, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Any, Callable, List, Optional, Set, TYPE_CHECKING
 if TYPE_CHECKING:
     from ._interfaces import Transport
+    from ._client import Client
 
 
 class ReleaseManager:
@@ -22,9 +24,9 @@ class ReleaseManager:
         self._pending_releases: Set[int] = set()
         self._release_lock: threading.Lock = threading.Lock()
 
-    def track(self, proxy, data: Dict[str, Any]) -> None:
+    def track(self, proxy) -> None:
         """Schedule a release when `proxy` is garbage-collected."""
-        instance_id = data.get("instanceId")
+        instance_id = proxy._instance_id
         if instance_id is None:
             return
         weakref.finalize(proxy, self._schedule, instance_id)
@@ -52,11 +54,24 @@ class ReleaseManager:
 
 
 def gc_flush(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Decorator: flush pending Unity object releases after the method returns."""
+    """Decorator: flush pending Unity object releases after the call returns.
+
+    The client is the first `Client` argument, so this works both on `Client`
+    methods (`self` is the client) and on wrapper-class methods that receive
+    the client as a later argument.
+    """
     @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
+    def wrapper(*args, **kwargs):
+        # Imported here because _client imports this module at import time.
+        from ._client import Client
+        client = next(
+            (a for a in itertools.chain(args, kwargs.values()) if isinstance(a, Client)),
+            None)
+        if client is None:
+            raise TypeError(
+                f"{func.__name__}() decorated with @gc_flush was called without a Client argument")
         try:
-            return func(self, *args, **kwargs)
+            return func(*args, **kwargs)
         finally:
-            self.flush_releases()
+            client.flush_releases()
     return wrapper

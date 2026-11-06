@@ -26,6 +26,7 @@ class ObjectProxy(SupportsAsDict):
     """
 
     data: Dict[str, Any]
+    _instance_id: Optional[int]
     _transport: Transport
     _make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy]
 
@@ -33,13 +34,14 @@ class ObjectProxy(SupportsAsDict):
         self,
         data: Dict[str, Any],
         transport: Transport,
-        track: Callable[[ObjectProxy, Dict[str, Any]], None],
+        track: Callable[[ObjectProxy], None],
         make_property_proxy: Callable[[Dict[str, Any], List[str]], PropertyProxy],
     ):
         object.__setattr__(self, "data", data)
+        object.__setattr__(self, "_instance_id", data.get("instanceId"))
         object.__setattr__(self, "_transport", transport)
         object.__setattr__(self, "_make_property_proxy", make_property_proxy)
-        track(self, data)
+        track(self)
 
     def __getattr__(self, name: str) -> PropertyProxy:
         if name.startswith("_"):

@@ -234,7 +234,7 @@ Tracks GC'd ObjectProxy instances and batches their release over RPC.
 
 ## Functions (lliquidlink.client._release)
 
-- `gc_flush(func: Callable[..., Any])` — Decorator: flush pending Unity object releases after the method returns.
+- `gc_flush(func: Callable[..., Any])` — Decorator: flush pending Unity object releases after the call returns.
 
 ---
 

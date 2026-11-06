@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 import anyio
 
 from ._event import Event
+from ._identity_cache import ObjectIdentityCache
 from ._proxy import ObjectProxy, PropertyProxy
 from ._release import ReleaseManager
 from ._serialization import Serialization
@@ -23,7 +24,8 @@ class Client:
 
     def __init__(self, transport: Transport, verify_releases: bool = False):
         self._transport: Transport = transport
-        self._serialization: Serialization = Serialization(lambda data: ObjectProxy(data, self._transport, self._release.track, self._make_property_proxy))
+        self._object_cache: ObjectIdentityCache = ObjectIdentityCache()
+        self._serialization: Serialization = Serialization(self._make_object_proxy)
         transport.bind_codec(self._serialization)
         self._release: ReleaseManager = ReleaseManager(transport, verify=verify_releases)
         self.on_execute: Event = Event()
@@ -38,6 +40,12 @@ class Client:
 
     def _make_property_proxy(self, obj: Optional[Dict[str, Any]], chain: List[str]) -> PropertyProxy:
         return PropertyProxy(obj, chain, self._transport, self._make_property_proxy)
+
+    def _make_object_proxy(self, data: Dict[str, Any]) -> ObjectProxy:
+        return self._object_cache.get_or_create(
+            data,
+            lambda d: ObjectProxy(d, self._transport, self._release.track, self._make_property_proxy),
+        )
 
     def flush_releases(self) -> Optional[List[int]]:
         """Send pending object releases now (callable from a worker thread)."""
