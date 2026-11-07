@@ -2,6 +2,76 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-11-07)
+
+### Bug Fixes
+
+- **csharp**: Let arrays of converter-backed elements reach their converter
+  ([`a82e9ce`](https://github.com/hide00310/UniLiquidLink/commit/a82e9cef8deed84c18ef663f305422706b4158dc))
+
+- **csharp**: Write Unity fake-null objects as JSON null
+  ([`b7e4f26`](https://github.com/hide00310/UniLiquidLink/commit/b7e4f26589c57eef3e7dd1db26357ebcda749248))
+
+- **python**: Attach the failing method and params to RPC errors
+  ([`937cb75`](https://github.com/hide00310/UniLiquidLink/commit/937cb757a7cce8b98628c91d0fa8b53a6027227e))
+
+- **python**: Drop the decoded frame so ObjectProxy can be released
+  ([`ed28817`](https://github.com/hide00310/UniLiquidLink/commit/ed28817cbb8c4953e6f73fbaec40d59aa66f0665))
+
+- **python**: Keep RpcError type and attach the failing call
+  ([`b44f244`](https://github.com/hide00310/UniLiquidLink/commit/b44f24481a74b32374ab79dc7fb7fe0a84084d07))
+
+- **python**: Reuse one ObjectProxy per Unity instanceId
+  ([`457d433`](https://github.com/hide00310/UniLiquidLink/commit/457d4332f190448a3d90ee43e00d32603bd9b608))
+
+### Chores
+
+- **docs**: Regenerate class diagram and API docs
+  ([`790978d`](https://github.com/hide00310/UniLiquidLink/commit/790978d2a3f94e74743991f275ac2187a1444336))
+
+- **docs**: Regenerate class diagram and API docs for Client.run
+  ([`148268d`](https://github.com/hide00310/UniLiquidLink/commit/148268d2c1dc8c425678c79ca4a5d4cbdd5e9a1b))
+
+- **tools**: Delete tools~/Analyzer csproj files and tools~/tmp.py
+  ([`175c83a`](https://github.com/hide00310/UniLiquidLink/commit/175c83a15ff0cc05757f75ce2d22793387097ad0))
+
+- **tools**: Restore tools~/Analyzer csproj files
+  ([`2022026`](https://github.com/hide00310/UniLiquidLink/commit/2022026fb2b8ca9809cf3f20d320b3df25e80c37))
+
+- **unity**: Drop Models/Schema.cs.meta
+  ([`3e3a4c6`](https://github.com/hide00310/UniLiquidLink/commit/3e3a4c6294741ae22877c85becab71e1a6f3d8c4))
+
+- **unity**: Restore Models/Schema.cs.meta
+  ([`80d4ee5`](https://github.com/hide00310/UniLiquidLink/commit/80d4ee5c8075e8fce98970149d09926dbd0e8edd))
+
+- **unity**: Rewrite guid in 93 .meta files and drop 10 Samples~ .meta files
+  ([`e8b6a06`](https://github.com/hide00310/UniLiquidLink/commit/e8b6a0644c658a6630aa7dc91a1ad5ce1da22015))
+
+### Documentation
+
+- **readme**: Refresh Features examples and add Python Scripting item
+  ([`ba95c3e`](https://github.com/hide00310/UniLiquidLink/commit/ba95c3e323d1a4ce56efd14033e8fac5471d4968))
+
+### Features
+
+- **rpc**: Add RPC timing stats across client, gateway and Unity
+  ([`f245f09`](https://github.com/hide00310/UniLiquidLink/commit/f245f090184026354929ea085a3d52ca509eca79))
+
+### Performance Improvements
+
+- **csharp**: Keep the main-thread drain alive across a burst of RPCs
+  ([`d62a083`](https://github.com/hide00310/UniLiquidLink/commit/d62a083b418a0590a49642ca839df15c8280b685))
+
+### Refactoring
+
+- **python**: Rename Client.on_execute event to run
+  ([`a42c8b2`](https://github.com/hide00310/UniLiquidLink/commit/a42c8b2ec8ffdbf6989b1a060cb288d104d8db04))
+
+### Breaking Changes
+
+- **python**: Client.on_execute is removed; register handlers with `client.run += handler` instead.
+
+
 ## v1.3.0 (2026-08-02)
 
 ### Bug Fixes
