@@ -19,10 +19,13 @@ It lets you call Unity from Python using almost the same syntax as Unity C#.
 ## Features
 
 - **Write with almost the same syntax as Unity C#**
-  - C#: `cube.transform.Rotate(30, 45, 0)` Python: `cube.transform.Rotate(30, 45, 0)`
-  - Property chains and method calls are converted as-is
+  - C#: `GameObject.Find("Cube").transform.position = new Vector3(1, 2, 3);`
+  - Python: `client.GameObject.Find("Cube").transform.position = {"x": 1, "y": 2, "z": 3}`
+  - Property chains and method calls can be converted as-is
 - **Runs from Python with no compilation and no types**
   - The compilation and type declarations required in C# are not needed in Python
+- **A replacement for Python Scripting**
+  - It can replace Python Scripting, which is scheduled to be discontinued from Unity 6.1
 - **Unity and Python are completely independent**
   Unity (C#) and Python are separate processes that communicate only via JSON-RPC. Since they have no direct bindings or DLL dependencies on each other, they work with any combination of Unity version and Python version the user chooses.
 - **Only functionality registered on the C# side can be executed**
