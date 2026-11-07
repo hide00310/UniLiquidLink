@@ -13,45 +13,53 @@ class "Client" as lliquidlink.client._client.Client {
 }
 class "Event" as lliquidlink.client._event.Event {
 }
+class "ObjectIdentityCache" as lliquidlink.client._identity_cache.ObjectIdentityCache {
+}
 class "SupportsAsDict" as lliquidlink.client._interfaces.SupportsAsDict {
 }
-class "ReleaseManager" as lliquidlink.client._release.ReleaseManager {
-}
 class "Transport" as lliquidlink.client._interfaces.Transport {
+}
+class "ClientOptions" as lliquidlink.client._options.ClientOptions {
+}
+class "RpcTimingOption" as lliquidlink.client._options.RpcTimingOption {
 }
 class "ObjectProxy" as lliquidlink.client._proxy.ObjectProxy {
 }
 class "PropertyProxy" as lliquidlink.client._proxy.PropertyProxy {
 }
+class "ReleaseManager" as lliquidlink.client._release.ReleaseManager {
+}
 class "Serialization" as lliquidlink.client._serialization.Serialization {
 }
 class "StreamTransport" as lliquidlink.client._transports.StreamTransport {
 }
+class "ByteStream" as lliquidlink.core._interfaces.ByteStream {
+}
+class "JsonRpcPeer" as lliquidlink.core._rpc.JsonRpcPeer {
+}
+class "StdioByteStream" as lliquidlink.core._rpc.StdioByteStream {
+}
 class "_Slot" as lliquidlink.core._rpc._Slot {
+}
+class "RpcTimingStats" as lliquidlink.core._timing.RpcTimingStats {
 }
 class "MessageStream" as lliquidlink.server._interfaces.MessageStream {
 }
 class "RpcBridge" as lliquidlink.server._interfaces.RpcBridge {
 }
+class "ServerTransport" as lliquidlink.server._transport.ServerTransport {
+}
+class "TcpServerTransport" as lliquidlink.server._transport.TcpServerTransport {
+}
 class "_TcpConnection" as lliquidlink.server._transport._TcpConnection {
 }
 class "IpcBridge" as lliquidlink.server.ipc_bridge.IpcBridge {
-}
-class "JsonRpcPeer" as lliquidlink.core._rpc.JsonRpcPeer {
-}
-class "ByteStream" as lliquidlink.core._interfaces.ByteStream {
-}
-class "StdioByteStream" as lliquidlink.core._rpc.StdioByteStream {
 }
 class "RpcNameResolver" as lliquidlink.server.resolver.RpcNameResolver {
 }
 class "TypeNameResolver" as lliquidlink.server.resolver.TypeNameResolver {
 }
 class "Server" as lliquidlink.server.server.Server {
-}
-class "ServerTransport" as lliquidlink.server._transport.ServerTransport {
-}
-class "TcpServerTransport" as lliquidlink.server._transport.TcpServerTransport {
 }
 class "RpcChainStep" as lliquidlink.client._schema.RpcChainStep {
 }
@@ -70,22 +78,30 @@ class "<color:red>RpcError</color>" as lliquidlink.core._rpc.RpcError {
 
 lliquidlink.client._proxy.ObjectProxy --|> lliquidlink.client._interfaces.SupportsAsDict
 lliquidlink.client._transports.StreamTransport --|> lliquidlink.client._interfaces.Transport
-lliquidlink.server._transport._TcpConnection --|> lliquidlink.server._interfaces.MessageStream
-lliquidlink.server.ipc_bridge.IpcBridge --|> lliquidlink.server._interfaces.RpcBridge
 lliquidlink.core._rpc.StdioByteStream --|> lliquidlink.core._interfaces.ByteStream
 lliquidlink.server._transport.TcpServerTransport --|> lliquidlink.server._transport.ServerTransport
-lliquidlink.client._client.Client *-- lliquidlink.client._event.Event : on_execute
+lliquidlink.server._transport._TcpConnection --|> lliquidlink.server._interfaces.MessageStream
+lliquidlink.server.ipc_bridge.IpcBridge --|> lliquidlink.server._interfaces.RpcBridge
+lliquidlink.client._client.Client *-- lliquidlink.client._event.Event : run
+lliquidlink.client._client.Client *-- lliquidlink.client._identity_cache.ObjectIdentityCache : _object_cache
+lliquidlink.client._client.Client *-- lliquidlink.client._options.ClientOptions : options
+lliquidlink.client._options.ClientOptions *-- lliquidlink.client._options.RpcTimingOption : rpc_timing
 lliquidlink.client._client.Client *-- lliquidlink.client._release.ReleaseManager : _release
 lliquidlink.client._client.Client *-- lliquidlink.client._serialization.Serialization : _serialization
 lliquidlink.client._transports.StreamTransport *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
 lliquidlink.server.ipc_bridge.IpcBridge *-- lliquidlink.core._rpc.JsonRpcPeer : _peer
+lliquidlink.client._transports.StreamTransport *-- lliquidlink.core._timing.RpcTimingStats : timing
 lliquidlink.client._client.Client o-- lliquidlink.client._interfaces.Transport : _transport
+lliquidlink.client._options.RpcTimingOption o-- lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.client._release.ReleaseManager o-- lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.core._rpc.JsonRpcPeer o-- lliquidlink.core._interfaces.ByteStream : _stream
 lliquidlink.server.server.Server o-- lliquidlink.server._transport.ServerTransport : _transport
+lliquidlink.client._interfaces.Transport --> lliquidlink.core._timing.RpcTimingStats : timing
 lliquidlink.client._proxy.ObjectProxy --> lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.client._proxy.PropertyProxy --> lliquidlink.client._interfaces.Transport : _transport
 lliquidlink.core._rpc.JsonRpcPeer --> lliquidlink.core._rpc._Slot : _pending
+lliquidlink.core._rpc.JsonRpcPeer --> lliquidlink.core._timing.RpcTimingStats : timing
+lliquidlink.server._interfaces.RpcBridge --> lliquidlink.core._timing.RpcTimingStats : timing_stats
 lliquidlink.server.server.Server --> lliquidlink.server.ipc_bridge.IpcBridge : _bridge
 lliquidlink.server.server.Server --> lliquidlink.server.resolver.RpcNameResolver : _resolver
 lliquidlink.server.server.Server --> lliquidlink.server.resolver.TypeNameResolver : _type_resolver
@@ -106,7 +122,11 @@ package "lliquidlink.client._client" as lliquidlink.client._client {
 }
 package "lliquidlink.client._event" as lliquidlink.client._event {
 }
+package "lliquidlink.client._identity_cache" as lliquidlink.client._identity_cache {
+}
 package "lliquidlink.client._interfaces" as lliquidlink.client._interfaces {
+}
+package "lliquidlink.client._options" as lliquidlink.client._options {
 }
 package "lliquidlink.client._proxy" as lliquidlink.client._proxy {
 }
@@ -128,6 +148,8 @@ package "lliquidlink.core._logging" as lliquidlink.core._logging {
 }
 package "lliquidlink.core._rpc" as lliquidlink.core._rpc {
 }
+package "lliquidlink.core._timing" as lliquidlink.core._timing {
+}
 package "lliquidlink.server" as lliquidlink.server {
 }
 package "lliquidlink.server.__main__" as lliquidlink.server.__main__ {
@@ -145,22 +167,28 @@ package "lliquidlink.server.server" as lliquidlink.server.server {
 lliquidlink.client --> lliquidlink.client._client
 lliquidlink.client --> lliquidlink.client._event
 lliquidlink.client --> lliquidlink.client._interfaces
+lliquidlink.client --> lliquidlink.client._options
 lliquidlink.client --> lliquidlink.client._proxy
 lliquidlink.client --> lliquidlink.client._release
 lliquidlink.client --> lliquidlink.client._transports
 lliquidlink.client --> lliquidlink.core
 lliquidlink.client --> lliquidlink.core._logging
 lliquidlink.client._client --> lliquidlink.client._event
+lliquidlink.client._client --> lliquidlink.client._identity_cache
+lliquidlink.client._client --> lliquidlink.client._options
 lliquidlink.client._client --> lliquidlink.client._proxy
 lliquidlink.client._client --> lliquidlink.client._release
 lliquidlink.client._client --> lliquidlink.client._serialization
 lliquidlink.client._proxy --> lliquidlink.client._interfaces
 lliquidlink.client._proxy --> lliquidlink.client.models
+lliquidlink.client._release --> lliquidlink.client._client
 lliquidlink.client._transports --> lliquidlink.client._interfaces
 lliquidlink.client.models --> lliquidlink.client._schema
 lliquidlink.core --> lliquidlink.core._interfaces
 lliquidlink.core --> lliquidlink.core._rpc
+lliquidlink.core --> lliquidlink.core._timing
 lliquidlink.core._rpc --> lliquidlink.core._interfaces
+lliquidlink.core._rpc --> lliquidlink.core._timing
 lliquidlink.server --> lliquidlink.core._logging
 lliquidlink.server --> lliquidlink.server.server
 lliquidlink.server.__main__ --> lliquidlink.server.server
@@ -171,7 +199,9 @@ lliquidlink.server.server --> lliquidlink.server._transport
 lliquidlink.server.server --> lliquidlink.server.ipc_bridge
 lliquidlink.server.server --> lliquidlink.server.resolver
 lliquidlink.client._client ..> lliquidlink.client._interfaces
+lliquidlink.client._identity_cache ..> lliquidlink.client._proxy
 lliquidlink.client._interfaces ..> lliquidlink.client._serialization
+lliquidlink.client._options ..> lliquidlink.client._interfaces
 lliquidlink.client._release ..> lliquidlink.client._interfaces
 lliquidlink.client._transports ..> lliquidlink.client._serialization
 @enduml
@@ -187,13 +217,22 @@ set namespaceSeparator none
 hide members
 
 class MainThreadDispatcher {
+    - _draining : bool
+    + IdleWaitMilliseconds : int <<get>> <<set>> = 10
     + Enqueue(action:Action) : void
     + Start() : void
     + Stop() : void
-    - ProcessAll() : void
+    <<internal>> ProcessAll() : void
 }
 class UnityObjectConverter {
-    + UnityObjectConverter(registry:ObjectRegistry)
+    + UnityObjectConverter(registry:ObjectRegistry, nullChecker:IRpcNullChecker<UnityEngine.Object>)
+}
+class UnityObjectNullChecker <<sealed>> {
+    + IsNull(value:UnityEngine.Object) : bool
+}
+class "IRpcNullChecker`1"<T> {
+}
+class "IRpcNullChecker`1"<T> {
 }
 class "InstanceObjectConverter`1"<T> {
 }
@@ -202,11 +241,14 @@ class "JsonConverter`1"<T> {
 class "RpcJsonConverter`2"<T1,T2> {
 }
 
+"IRpcNullChecker`1" <|-- UnityObjectNullChecker
 "JsonConverter`1" <|-- "JsonUtilityConverter`1"
 "RpcJsonConverter`2" <|-- "InstanceObjectConverter`1"
 IMainThreadDispatcher <|-- MainThreadDispatcher
 JsonConverterFactory <|-- JsonUtilityConverterFactory
 "InstanceObjectConverter`1" <|-- UnityObjectConverter
+MainThreadDispatcher o-> ManualResetEventSlim
+"InstanceObjectConverter`1" --> "IRpcNullChecker`1"
 "InstanceObjectConverter`1" --> ObjectRegistry
 @enduml
 ```
@@ -255,10 +297,38 @@ class RpcJsonConverterReadException {
 }
 class RpcRegistrationTable {
 }
+class RpcTimingStats {
+    + Enabled : bool <<get>>
+    - _rpcCount : long
+    - _localProcessingTime : double
+    - _remoteTime : double
+    - _responseNetworkTime : double
+    - _requestNetworkTime : double
+    - _bytesSent : long
+    - _bytesReceived : long
+    - _dispatchQueueTime : double
+    - _decodeTime : double
+    - _resolveTime : double
+    - _deserializeArgsTime : double
+    - _invokeTime : double
+    - _serializeResultTime : double
+    - _encodeTime : double
+    - _sendTime : double
+    - _overloadAttemptCount : long
+    + RpcTimingStats(enabled:bool)
+    + Record(localProcessingTime:double, remoteTime:double, responseNetworkTime:double, requestNetworkTime:double) : void
+    + RecordStages(stages:RpcStageTimings, dispatchQueueTime:double, decodeTime:double, encodeTime:double, sendTime:double) : void
+    + RecordBytes(sent:long, received:long) : void
+    + Reset() : void
+    + ToDict() : Dictionary<string, object>
+}
 enum Stage {
     Pre= 0,
     Main= 1,
     Fallback= 2,
+}
+interface "IRpcNullChecker`1"<in T> {
+    IsNull(value:T) : bool
 }
 class "JsonConverter`1"<T> {
 }
@@ -277,7 +347,7 @@ class JsonPrimitiveHelper <<static>> {
 class JsonRpcFraming <<static>> {
     + {static} WrapFrame(body:byte[]) : byte[]
     + {static} ReadFrameLength(stream:Stream) : int
-    + {static} BuildResponse(id:long, result:object, error:string, opts:JsonSerializerOptions) : byte[]
+    + {static} BuildResponse(id:long, result:object, error:string, opts:JsonSerializerOptions, sentAt:double?, receivedAt:double?) : byte[]
 }
 class RpcChainStep <<partial>> {
     + name : string <<get>> <<set>>
@@ -293,12 +363,20 @@ class RpcOptions {
 class RpcRequest <<partial>> {
     + id : long? <<get>> <<set>>
     + method : string <<get>> <<set>>
+    + sent_at : double? <<get>> <<set>>
 }
 class RpcResolveChainParam <<partial>> {
     + method : string <<get>> <<set>>
 }
 class RpcResolveChainSetParam <<partial>> {
     + property : string <<get>> <<set>>
+}
+class RpcStageTimings {
+    + ResolveTime : double
+    + DeserializeArgsTime : double
+    + InvokeTime : double
+    + SerializeResultTime : double
+    + OverloadAttempts : int
 }
 class Utils <<static>> {
     + {static} GetCurrentDirectory(path:string) : string
@@ -320,6 +398,8 @@ JsonSerializerChain +-- StageConfig
 RpcSearcher +-- MethodCandidate
 "RpcJsonConverter`2" o-> JsonSerializerOptions
 RpcRegistry o-> RpcRegistrationTable
+StdioTransport o-> DateTime
+StdioTransport o-> RpcTimingStats
 MethodCaller --> JsonSerializerChain
 MethodCaller --> RpcSearcher
 PreObjectConverter --> ObjectRegistry
@@ -337,6 +417,7 @@ StageConfig --> JsonSerializerOptions
 StdioTransport --> IMainThreadDispatcher
 StdioTransport --> JsonSerializerOptions
 StdioTransport --> MethodCaller
+StdioTransport --> RpcTimingStats
 StdioTransport --> Stream
 StdioTransport --> Thread
 @enduml

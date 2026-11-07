@@ -50,10 +50,18 @@ namespace LLiquidLink
         {
             readonly IJsonTypeInfoResolver _inner = new DefaultJsonTypeInfoResolver();
 
+            /// <summary>True when the type itself has a registered converter, or is an array whose
+            /// element type has one (so the array's element loop can reach that converter).</summary>
+            static bool HasConverter(Type type, JsonSerializerOptions options)
+            {
+                if (options.Converters.Any(c => c.CanConvert(type))) { return true; }
+                Type elementType = type.IsArray ? type.GetElementType() : null;
+                return elementType != null && HasConverter(elementType, options);
+            }
+
             public JsonTypeInfo GetTypeInfo(Type type, JsonSerializerOptions options)
             {
-                bool hasRegisteredConverter = options.Converters.Any(c => c.CanConvert(type));
-                return !hasRegisteredConverter ? throw new NotSupportedException(type.FullName) : _inner.GetTypeInfo(type, options);
+                return !HasConverter(type, options) ? throw new NotSupportedException(type.FullName) : _inner.GetTypeInfo(type, options);
             }
         }
 

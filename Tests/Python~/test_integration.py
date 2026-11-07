@@ -53,6 +53,10 @@ async def test_nested_static_class(client):
     assert_golden("nested_static_class", await client._exec(IntegrationClient.run_nested_static_class))
 
 @pytest.mark.asyncio(loop_scope="session")
+async def test_object_identity_dedup(client):
+    assert_golden("object_identity_dedup", await client._exec(IntegrationClient.run_object_identity_dedup))
+
+@pytest.mark.asyncio(loop_scope="session")
 async def test_object_method(client):
     assert_golden("object_method", await client._exec(IntegrationClient.run_object_method))
 
@@ -95,6 +99,14 @@ async def test_sample_method_int(client):
 @pytest.mark.asyncio(loop_scope="session")
 async def test_sample_method_int_str(client):
     assert_golden("sample_method_int_str", await client._exec(IntegrationClient.run_sample_method_int_str))
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_sample_object_array_instances(client):
+    assert_golden("sample_object_array_instances", await client._exec(IntegrationClient.run_sample_object_array_instances))
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_sample_object_array_primitives(client):
+    assert_golden("sample_object_array_primitives", await client._exec(IntegrationClient.run_sample_object_array_primitives))
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_sample_primitive_object_bool(client):

@@ -3,6 +3,8 @@
 Exercises the full client path: TcpJsonRpcTransport, the anyio runtime,
 synchronous proxy calls from a worker thread, chain resolution, and ObjectProxy.
 """
+import time
+
 import anyio
 import pytest
 
@@ -16,6 +18,8 @@ HOST, PORT = "localhost", 8799
 def _dispatch(method, params):
     if method == "SampleMethodInt":
         return params[0]
+    if method == "get_rpc_timing_stats":
+        return {"external": {"rpc_count": 3}, "ipc": {"rpc_count": 3}}
     if method == "Find":
         return {"instanceId": 100, "orgType": "UnityEngine.GameObject",
                 "name": params[0], "instanceObjectAttr" : 1}
@@ -38,7 +42,20 @@ async def _handler(ws):
         if msg.get("id") is None:
             continue
         result = _dispatch(msg.get("method"), msg.get("params", []))
-        await ws.send(encode_frame({"jsonrpc": "2.0", "id": msg["id"], "result": result}))
+        response = {"jsonrpc": "2.0", "id": msg["id"], "result": result}
+        # Mirrors the real server's gating: only echo received_at/sent_at when the
+        # request itself carried a "sent_at" (i.e. the client has RPC timing enabled).
+        sent_at = msg.get("sent_at")
+        if sent_at is not None:
+            # A real (not offset-into-the-future) received_at/sent_at pair, with a real sleep in
+            # between: wall-clock timestamps must stay causally ordered (sent_at can never be
+            # after the client's own receipt), so remote_time's floor has to come from an actual
+            # elapsed delay rather than nudging a timestamp artificially forward.
+            received_at = time.time()
+            response["received_at"] = received_at
+            await anyio.sleep(0.01)
+            response["sent_at"] = time.time()
+        await ws.send(encode_frame(response))
 
 
 class _FakeTcpServer:
@@ -100,7 +117,7 @@ async def test_client_over_tcp():
 
 
 @pytest.mark.anyio
-async def test_on_execute_receives_client_over_tcp():
+async def test_run_receives_client_over_tcp():
     received = []
 
     def handler(client):
@@ -108,10 +125,10 @@ async def test_on_execute_receives_client_over_tcp():
 
     async with _FakeTcpServer(HOST, PORT):
         client = Client(TcpJsonRpcTransport(HOST, PORT))
-        client.on_execute += handler
+        client.run += handler
         await client.connect()
         try:
-            await client.execute(client.on_execute)
+            await client.execute(client.run)
         finally:
             await client.disconnect()
 
@@ -119,7 +136,7 @@ async def test_on_execute_receives_client_over_tcp():
 
 
 @pytest.mark.anyio
-async def test_on_execute_multiple_handlers_dispatch_in_order():
+async def test_run_multiple_handlers_dispatch_in_order():
     order = []
 
     def first(client):
@@ -129,12 +146,58 @@ async def test_on_execute_multiple_handlers_dispatch_in_order():
         order.append("second")
 
     client = Client(TcpJsonRpcTransport(HOST, PORT))
-    client.on_execute += first
-    client.on_execute += second
+    client.run += first
+    client.run += second
 
-    await client.execute(client.on_execute)
+    await client.execute(client.run)
 
     assert order == ["first", "second"]
+
+
+def _timing_scenario(c):
+    c.options.rpc_timing.enabled = True
+    c.SampleMethodInt(1)
+    c.SampleMethodInt(2)
+    c.out["stats"] = c.options.rpc_timing.to_dict()
+
+
+@pytest.mark.anyio
+async def test_rpc_timing_option_returns_combined_client_and_server_stats():
+    async with _FakeTcpServer(HOST, PORT):
+        client = _Client(TcpJsonRpcTransport(HOST, PORT))
+        await client.connect()
+        try:
+            await client.execute(_timing_scenario)
+        finally:
+            await client.disconnect()
+
+    stats = client.out["stats"]
+    # 2 application calls + the get_rpc_timing_stats call itself.
+    assert stats["client"]["rpc_count"] == 3
+    assert stats["server"] == {"external": {"rpc_count": 3}, "ipc": {"rpc_count": 3}}
+    # The fake handler echoes received_at/sent_at over the real TCP socket, so
+    # communication_time/remote_time are real (nonzero-capable) measurements here,
+    # not just structurally-present zeros.
+    client_stats = stats["client"]
+    assert client_stats["communication_time"] >= 0.0
+    assert client_stats["remote_time"] >= 0.0
+    assert client_stats["local_processing_time"] >= 0.0
+    assert client_stats["total_time"] == pytest.approx(
+        client_stats["local_processing_time"] + client_stats["communication_time"] + client_stats["remote_time"])
+
+
+@pytest.mark.anyio
+async def test_rpc_timing_disabled_by_default():
+    async with _FakeTcpServer(HOST, PORT):
+        client = _Client(TcpJsonRpcTransport(HOST, PORT))
+        await client.connect()
+        try:
+            await client.execute(lambda c: c.SampleMethodInt(1))
+        finally:
+            await client.disconnect()
+
+    assert client.options.rpc_timing.enabled is False
+    assert client._transport.timing.to_dict()["rpc_count"] == 0
 
 
 @pytest.fixture

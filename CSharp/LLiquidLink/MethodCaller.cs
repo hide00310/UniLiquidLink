@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -57,24 +58,61 @@ namespace LLiquidLink
         /// <param name="candidates">Overload candidates to try.</param>
         /// <param name="args">JSON argument elements.</param>
         /// <returns>Wrapped result of the first matching candidate.</returns>
-        object CallCandidates(string rpcName, IList<RpcSearcher.MethodCandidate> candidates, JsonElement[] args)
+        object CallCandidates(string rpcName, IList<RpcSearcher.MethodCandidate> candidates, JsonElement[] args, RpcStageTimings stages = null)
         {
             Exception? lastError = null;
             foreach (RpcSearcher.MethodCandidate c in candidates)
             {
                 object[] callArgs;
+                Stopwatch argsSw = stages != null ? Stopwatch.StartNew() : null;
+                if (stages != null)
+                {
+                    stages.OverloadAttempts++;
+                }
                 try
                 {
                     callArgs = BuildCandidateArgs(c, args);
                 }
                 catch (Exception ex)
                 {
+                    if (argsSw != null)
+                    {
+                        stages.DeserializeArgsTime += argsSw.Elapsed.TotalSeconds;
+                    }
                     lastError = ex;
                     continue;
                 }
+                if (argsSw != null)
+                {
+                    stages.DeserializeArgsTime += argsSw.Elapsed.TotalSeconds;
+                }
+
                 _getLogger().DebugFormat("CallMethod {0}({1})", c.FullName, new ArrayLogFormatter(callArgs));
-                object result = c.Method(callArgs);
-                return result == null ? null : (object)_chain.SerializeToElement(result, result.GetType());
+
+                object result;
+                if (stages != null)
+                {
+                    var invokeSw = Stopwatch.StartNew();
+                    result = c.Method(callArgs);
+                    stages.InvokeTime += invokeSw.Elapsed.TotalSeconds;
+                }
+                else
+                {
+                    result = c.Method(callArgs);
+                }
+
+                if (result == null)
+                {
+                    return null;
+                }
+                if (stages != null)
+                {
+                    var serializeSw = Stopwatch.StartNew();
+                    object serialized = (object)_chain.SerializeToElement(result, result.GetType());
+                    stages.SerializeResultTime += serializeSw.Elapsed.TotalSeconds;
+                    return serialized;
+                }
+                return (object)_chain.SerializeToElement(result, result.GetType());
             }
             if (lastError != null)
             {
@@ -134,9 +172,34 @@ namespace LLiquidLink
         /// <exception cref="KeyNotFoundException">Thrown when the method name is not registered.</exception>
         public object Call(string method, JsonElement[] args)
         {
-            return !_searcher.TryGetCandidates(method, out IList<RpcSearcher.MethodCandidate> candidates)
-                ? throw new KeyNotFoundException("Method not found: " + method)
-                : CallCandidates(method, candidates, args);
+            return Call(method, args, null);
+        }
+
+        /// <summary>
+        /// Dispatch a registered RPC method by name with the given JSON arguments, optionally recording
+        /// this call's stage breakdown (resolve/deserialize/invoke/serialize/overload attempts).
+        /// </summary>
+        /// <param name="method">RPC method name.</param>
+        /// <param name="args">JSON argument elements.</param>
+        /// <param name="stages">When non-null, accumulates this call's per-stage timing into it.</param>
+        /// <returns>Result wrapped as a <see cref="JsonElement"/>.</returns>
+        /// <exception cref="KeyNotFoundException">Thrown when the method name is not registered.</exception>
+        public object Call(string method, JsonElement[] args, RpcStageTimings stages)
+        {
+            if (stages == null)
+            {
+                return !_searcher.TryGetCandidates(method, out IList<RpcSearcher.MethodCandidate> plainCandidates)
+                    ? throw new KeyNotFoundException("Method not found: " + method)
+                    : CallCandidates(method, plainCandidates, args, null);
+            }
+            var resolveSw = Stopwatch.StartNew();
+            bool found = _searcher.TryGetCandidates(method, out IList<RpcSearcher.MethodCandidate> candidates);
+            stages.ResolveTime += resolveSw.Elapsed.TotalSeconds;
+            if (!found)
+            {
+                throw new KeyNotFoundException("Method not found: " + method);
+            }
+            return CallCandidates(method, candidates, args, stages);
         }
 
         /// <summary>Build the full argument array for an instance method call, filling defaults for omitted params.</summary>

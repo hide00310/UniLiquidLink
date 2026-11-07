@@ -2,12 +2,12 @@
 
 Usage::
 
-    def on_execute(client):
+    def run(client):
         go = client.Find("Player")
         go.transform.Rotate(0, 90, 0)
 
     client = Client(TcpJsonRpcTransport("localhost", 8700))
-    client.on_execute += on_execute
+    client.run += run
     client.mainloop()
 """
 from __future__ import annotations
@@ -37,6 +37,7 @@ setup_logger()
 from ._client import Client
 from ._event import Event
 from ._interfaces import Transport
+from ._options import ClientOptions, RpcTimingOption
 from ._proxy import ObjectProxy, PropertyProxy
 from ._release import gc_flush
 from ._transports import StdioJsonRpcTransport, TcpJsonRpcTransport
@@ -45,6 +46,8 @@ from . import models
 
 __all__ = [
     "Client",
+    "ClientOptions",
+    "RpcTimingOption",
     "gc_flush",
     "Event",
     "ObjectProxy",

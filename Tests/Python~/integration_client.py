@@ -7,7 +7,7 @@ import gc
 
 import pytest
 import pytest_asyncio
-from lliquidlink.client import Client, ObjectProxy, TcpJsonRpcTransport
+from lliquidlink.client import Client, ObjectProxy, TcpJsonRpcTransport, gc_flush
 from lliquidlink.client.models import type_, enum
 
 
@@ -26,7 +26,7 @@ class IntegrationClient(Client):
     def __init__(self):
         super().__init__(TcpJsonRpcTransport("localhost", 8700), verify_releases=True)
         self.captured = {}
-        self.on_execute += self._on_execute
+        self.run += self._run
 
     def _try(self, fn):
         try:
@@ -66,6 +66,13 @@ class IntegrationClient(Client):
     def run_sample_game_object_array(self):
         go = self.Find("UniLiquidLinkTestObject")
         return self._try(lambda: self.SampleGameObjectArray([go, go]))
+
+    def run_sample_object_array_instances(self):
+        go = self.Find("UniLiquidLinkTestObject")
+        return self._try(lambda: self.SampleObjectArray([go, go]))
+
+    def run_sample_object_array_primitives(self):
+        return self._try(lambda: self.SampleObjectArray([1, 2.5, "s", True]))
 
     def run_sample_game_object_dict(self):
         go = self.Find("UniLiquidLinkTestObject")
@@ -176,14 +183,45 @@ class IntegrationClient(Client):
         """Verify GC-triggered release batching reaches Unity via rpc_call."""
         def scenario():
             proxy = self.Find("UniLiquidLinkTestObject")
-            instance_id = proxy.data.get("instanceId")
+            instance_id = proxy._instance_id
             del proxy
             gc.collect()
             confirmed = self.flush_releases()
             return instance_id in (confirmed or [])
         return self._try(scenario)
 
-    def _on_execute(self, _client):
+    def run_object_identity_dedup(self):
+        """Verify repeated resolutions of the same Unity object reuse one Python
+        proxy, so a release triggered by one now-dead reference does not evict
+        the id while another live reference is still using it (regression test
+        for the aliased-instanceId premature-release bug)."""
+        @gc_flush
+        def find_inner(client):
+            return client.Find("UniLiquidLinkTestObject")
+
+        def scenario():
+            # Drain any releases left pending by earlier scenarios that also
+            # touched "UniLiquidLinkTestObject" (and never flushed): otherwise
+            # find_inner's @gc_flush would flush those stale entries and evict
+            # the id this scenario is about to register under `outer`/`inner`,
+            # which would falsely look like a premature release of *this* run.
+            self.flush_releases()
+
+            outer = self.Find("UniLiquidLinkTestObject")
+            instance_id = outer._instance_id
+            inner = find_inner(self)
+            same_identity = outer is inner
+            del inner
+            gc.collect()
+            confirmed_after_inner = self.flush_releases()
+            released_after_inner = instance_id in (confirmed_after_inner or [])
+            return {
+                "same_identity": same_identity,
+                "released_after_inner_only": released_after_inner,
+            }
+        return self._try(scenario)
+
+    def _run(self, _client):
         self.add_abbreviated_classes(["GameObject", "UniLiquidLinkIntegrationTest", "AssetDatabase"])
         self.add_abbreviated_namespaces(["UnityEngine"])
         self.captured = {

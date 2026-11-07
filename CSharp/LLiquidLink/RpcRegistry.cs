@@ -457,7 +457,7 @@ namespace LLiquidLink
             _ = sb.AppendLine("full_name,class_name,method_name");
             foreach (string fullName in RegisteredRpcNames)
             {
-                if (fullName.StartsWith("JsonRpc_") || fullName.StartsWith("OnServerError"))
+                if (fullName.StartsWith("JsonRpc_") || fullName.StartsWith("OnServerError") || fullName.StartsWith("GetRpcTimingStats"))
                 {
                     continue;
                 }

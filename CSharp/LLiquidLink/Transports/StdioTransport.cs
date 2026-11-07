@@ -1,5 +1,6 @@
 using LLiquidLink.Logger;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -27,6 +28,11 @@ namespace LLiquidLink
         Thread _errReadThread;
         volatile bool _running;
         bool _streamsAttached;
+
+        readonly RpcTimingStats _timing = new RpcTimingStats(enabled: true);
+
+        /// <summary>RPC timing/byte-volume stats for this stdio connection (gateway leg of the IPC hop).</summary>
+        public RpcTimingStats Timing => _timing;
 
         /// <inheritdoc/>
         public int ClientId { get; private set; }
@@ -77,6 +83,9 @@ namespace LLiquidLink
                 throw new InvalidOperationException("AttachStreams must be called before Start().");
             }
             ClientId = 1;
+            // Scope _timing to this Python child process's lifetime (Start() is 1:1 with it), so it
+            // matches the "ipc" leg's scope rather than accumulating across the whole Editor session.
+            _timing.Reset();
             _running = true;
             _readThread = new Thread(ReadLoop) { IsBackground = true, Name = "StdioTransport" };
             _readThread.Start();
@@ -147,7 +156,12 @@ namespace LLiquidLink
                     }
 
                     byte[] captured = body;
-                    _dispatcher.Enqueue(() => Dispatch(captured));
+                    double receivedWall = NowUnixSeconds();
+                    int frameBytes = 4 + contentLength;
+                    // Stopwatch.GetTimestamp() is monotonic across the whole process, so a difference
+                    // taken later on the main thread is a valid elapsed measurement despite the thread hop.
+                    long enqueuedTicks = Stopwatch.GetTimestamp();
+                    _dispatcher.Enqueue(() => Dispatch(captured, receivedWall, frameBytes, enqueuedTicks));
                 }
             }
             catch (Exception ex)
@@ -213,15 +227,41 @@ namespace LLiquidLink
 
         // ── Dispatch (main thread) ────────────────────────────────────────────────
 
-        void Dispatch(byte[] rawJson)
+        static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        // Wall-clock seconds since the Unix epoch, comparable across processes (matches Python's
+        // time.time()); unlike Stopwatch, not usable for measuring local elapsed durations. Ticks-based
+        // (100ns resolution) rather than ToUnixTimeMilliseconds(): on the same-machine stdio IPC leg,
+        // real transfer time is sub-millisecond, so millisecond rounding could make
+        // request_network_time read as 0.0 or negative.
+        static double NowUnixSeconds()
         {
+            return (DateTime.UtcNow - UnixEpoch).Ticks / (double)TimeSpan.TicksPerSecond;
+        }
+
+        void Dispatch(byte[] rawJson, double receivedWall, int frameBytes, long enqueuedTicks)
+        {
+            // Wait between the request being fully received (ReadLoop, background thread) and being
+            // picked up here (main thread via EditorApplication.update). Stopwatch is monotonic across
+            // the whole process, so this cross-thread difference is valid. NOT part of local_processing_time
+            // below (that Stopwatch starts only now): tracked separately as dispatch_queue_time.
+            double dispatchQueueTime = (Stopwatch.GetTimestamp() - enqueuedTicks) / (double)Stopwatch.Frequency;
+
+            // Every frame on the wire counts here, including ones dropped below for parse/notify
+            // reasons, matching the gateway-side external_timing.record_bytes(received=...) scope.
+            _timing.RecordBytes(received: frameBytes);
+            var sw = Stopwatch.StartNew();
+
             // Observation-only hook (mirrors ITransportServer.OnData); production code dispatches via MethodCaller below.
             OnData?.Invoke(ClientId, new ArraySegment<byte>(rawJson));
 
             RpcRequest req;
+            double decodeTime;
             try
             {
+                var decodeSw = Stopwatch.StartNew();
                 req = JsonSerializer.Deserialize<RpcRequest>(rawJson);
+                decodeTime = decodeSw.Elapsed.TotalSeconds;
             }
             catch (JsonException ex)
             {
@@ -237,7 +277,8 @@ namespace LLiquidLink
 
             JsonElement[] args = req.@params ?? Array.Empty<JsonElement>();
 
-            // Notification (no id): fire and forget
+            // Notification (no id): fire and forget. Not timed (rpc_count/local_processing_time only
+            // cover completed request/response cycles), only the byte count recorded above applies.
             if (req.id == null)
             {
                 try { _caller.Call(req.method, args); }
@@ -246,18 +287,51 @@ namespace LLiquidLink
             }
 
             long id = req.id.Value;
+            // Only echo "sent_at"/"received_at" back when the request carried a "sent_at": _timing is
+            // always enabled on this transport, so gating on that (rather than on whether the sender
+            // opted in) would add new response fields even for senders with RPC timing turned off.
+            double? sentAt = req.sent_at;
+            double requestNetworkTime = sentAt.HasValue ? receivedWall - sentAt.Value : 0.0;
+            double? echoReceivedAt = sentAt.HasValue ? (double?)receivedWall : null;
+            var stages = new RpcStageTimings();
+
+            // Send() is called inline within each branch, BEFORE OnError is raised below: a
+            // subscriber's OnError handler may rethrow (e.g. the integration test harness uses
+            // OnError to surface errors loudly via ExceptionDispatchInfo.Throw()), which would
+            // otherwise skip a deferred send-after-try/catch and leave the caller's request
+            // hanging forever with no response.
             try
             {
-                object result = _caller.Call(req.method, args);
-                Send(JsonRpcFraming.BuildResponse(id, result, null, _jsonOptions));
+                object result = _caller.Call(req.method, args, stages);
+                // Taken here (after invoke, right before response framing) rather than before invoke,
+                // so Unity API execution time and result serialization time do NOT leak into the
+                // sender's measured response_network_time.
+                double? echoSentAt = sentAt.HasValue ? (double?)NowUnixSeconds() : null;
+                var encodeSw = Stopwatch.StartNew();
+                byte[] frame = JsonRpcFraming.BuildResponse(id, result, null, _jsonOptions, echoSentAt, echoReceivedAt);
+                double encodeTime = encodeSw.Elapsed.TotalSeconds;
+                var sendSw = Stopwatch.StartNew();
+                Send(frame);
+                double sendTime = sendSw.Elapsed.TotalSeconds;
+                _timing.RecordBytes(sent: frame.Length);
+                _timing.RecordStages(stages, dispatchQueueTime, decodeTime, encodeTime, sendTime);
             }
             catch (Exception ex)
             {
                 Exception reported = Utils.UnwrapTargetInvocation(ex);
-                Send(JsonRpcFraming.BuildResponse(id, null, reported.Message, _jsonOptions));
+                double? echoSentAt = sentAt.HasValue ? (double?)NowUnixSeconds() : null;
+                var encodeSw = Stopwatch.StartNew();
+                byte[] frame = JsonRpcFraming.BuildResponse(id, null, reported.Message, _jsonOptions, echoSentAt, echoReceivedAt);
+                double encodeTime = encodeSw.Elapsed.TotalSeconds;
+                var sendSw = Stopwatch.StartNew();
+                Send(frame);
+                double sendTime = sendSw.Elapsed.TotalSeconds;
+                _timing.RecordBytes(sent: frame.Length);
+                _timing.RecordStages(stages, dispatchQueueTime, decodeTime, encodeTime, sendTime);
                 _getLogger().Info("RPC error " + req.method + ": " + reported.Message);
                 OnError?.Invoke(ClientId, reported);
             }
+            _timing.Record(localProcessingTime: sw.Elapsed.TotalSeconds, requestNetworkTime: requestNetworkTime);
         }
     }
 }

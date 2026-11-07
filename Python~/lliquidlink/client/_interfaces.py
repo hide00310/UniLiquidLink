@@ -4,6 +4,8 @@ from typing import Any, Coroutine, List, Protocol, TYPE_CHECKING
 if TYPE_CHECKING:
     from ._serialization import Serialization
 
+from ..core import RpcTimingStats
+
 
 class Transport(Protocol):
     """RPC transport shape used by Client/ObjectProxy/PropertyProxy/ReleaseManager.
@@ -11,6 +13,9 @@ class Transport(Protocol):
     Satisfied structurally by StreamTransport; custom transport implementations
     only need to match this shape, not inherit from it.
     """
+
+    #: Per-connection RPC timing stats (communication vs. other time).
+    timing: RpcTimingStats
 
     def bind_codec(self, serialization: Serialization) -> None:
         ...

@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import Any, List, Protocol
 
+from ..core import RpcTimingStats
+
 
 class MessageStream(Protocol):
     """Async-iterable of raw frames plus send, used by `_handle_client`.
@@ -24,6 +26,9 @@ class RpcBridge(Protocol):
 
     Satisfied structurally by IpcBridge and test doubles (e.g. FakeBridge).
     """
+
+    #: RPC timing stats for this bridge's IPC leg (server↔C#).
+    timing_stats: RpcTimingStats
 
     async def call(self, method: str, params: List[Any]):
         ...

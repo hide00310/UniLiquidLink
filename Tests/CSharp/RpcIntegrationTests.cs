@@ -111,6 +111,22 @@ public class RpcIntegrationTests
     }
 
     [Test]
+    public void TestResolveChainGetComponentMissingReturnsNull()
+    {
+        // The test object is a Cube (no Camera). In the editor GetComponent returns a Unity fake-null object
+        // for a missing component; it must reach the client as JSON null, not as an object descriptor.
+        string findResp = _ctx.SendAndGetResponse(
+            @"{""jsonrpc"":""2.0"",""id"":4,""method"":""UnityEngine.GameObject.Find"",""params"":[""UniLiquidLinkTestObject""]}");
+        string goRpcObj = JsonDocument.Parse(findResp).RootElement.GetProperty("result").GetRawText();
+
+        string req = string.Format(
+            @"{{""jsonrpc"":""2.0"",""id"":11,""method"":""JsonRpc_ResolveChain"",""params"":[{{""obj"":{0},""steps"":[],""method"":""GetComponent"",""args"":[{{""rpcType"":1,""value"":""UnityEngine.Camera""}}]}}]}}",
+            goRpcObj);
+        string resp = _ctx.SendAndGetResponse(req);
+        AssertMatchesGolden("golden_resolve_chain_get_component_missing", resp);
+    }
+
+    [Test]
     public void TestResolveChainRotate()
     {
         string findResp = _ctx.SendAndGetResponse(

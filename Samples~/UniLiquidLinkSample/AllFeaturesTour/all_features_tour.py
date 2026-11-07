@@ -21,7 +21,7 @@ logger.setLevel(logging.DEBUG)
 DEMO_OBJECT = "AllFeaturesTourObject"
 DEMO_ASSET  = "Assets/AllFeaturesTourSample.mat"
 
-def on_execute(client):
+def run(client):
     # Register abbreviated class names so server-side methods can be called without
     # their full declaring-type prefix (e.g. client.Find(...) instead of
     # client.AllFeaturesTourServer.Find(...)).
@@ -111,7 +111,7 @@ def on_execute(client):
 
 def main():
     client = Client(TcpJsonRpcTransport("localhost", 8700))
-    client.on_execute += on_execute
+    client.run += run
 
     print("Connecting to Unity server...")
     client.mainloop()

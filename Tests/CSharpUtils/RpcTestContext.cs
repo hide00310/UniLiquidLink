@@ -42,7 +42,7 @@ public class RpcTestContext
             () => _logger, mainOptions, ex => { });
 
         _rpc.AddConverterAndRegister(mainOptions, new TypeConverter(server._typeResolver));
-        _rpc.AddConverterAndRegister(mainOptions, new UnityObjectConverter(server._registry));
+        _rpc.AddConverterAndRegister(mainOptions, new UnityObjectConverter(server._registry, new UnityObjectNullChecker()));
         _rpc.AddConverterAndRegister(mainOptions, new EnumConverter());
         _rpc.AddConverter(preOptions, new PreObjectConverter(server._registry));
         _rpc.AddConverter(fallbackOptions, new JsonUtilityConverterFactory());

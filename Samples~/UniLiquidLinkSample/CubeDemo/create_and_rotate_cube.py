@@ -15,7 +15,7 @@ logger.setLevel(logging.DEBUG)
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
 
-def on_execute(client):
+def run(client):
     # Create a new Cube primitive in the scene
     cube = client.GameObject.CreatePrimitive(enum("Cube"))
     print(f"Created cube: {cube}")
@@ -31,7 +31,7 @@ def on_execute(client):
 
 def main():
     client = Client(TcpJsonRpcTransport("localhost", 8700))
-    client.on_execute += on_execute
+    client.run += run
     print("Connecting to Unity server...")
     client.mainloop()
     print("Done.")

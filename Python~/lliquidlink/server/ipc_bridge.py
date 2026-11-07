@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, List, Optional
 
-from ..core import ByteStream, JsonRpcPeer, StdioByteStream
+from ..core import ByteStream, JsonRpcPeer, RpcTimingStats, StdioByteStream
 from ._interfaces import RpcBridge
 import logging
 logger = logging.getLogger(__name__)
@@ -17,8 +17,16 @@ class IpcBridge(RpcBridge):
 
     def __init__(self, stream: Optional[ByteStream] = None):
         # stream is injectable for tests; defaults to this process's stdio.
-        self._peer: JsonRpcPeer = JsonRpcPeer(stream if stream is not None else StdioByteStream())
+        # Always-on timing for this IPC leg (server-side; no user-facing toggle).
+        timing = RpcTimingStats(enabled=True)
+        self._peer: JsonRpcPeer = JsonRpcPeer(
+            stream if stream is not None else StdioByteStream(), timing=timing)
         self._task: Optional["asyncio.Task[None]"] = None
+
+    @property
+    def timing_stats(self) -> RpcTimingStats:
+        """RPC timing stats for the server↔C# IPC leg."""
+        return self._peer.timing
 
     async def connect(self) -> None:
         """Start the background loop that reads C# responses from stdin."""

@@ -1,9 +1,11 @@
 """Unit tests for lliquidlink.server (server + ipc_bridge) without C#."""
+import time
+
 import anyio
 import pytest
 from anyio.streams.buffered import BufferedByteReceiveStream
 
-from lliquidlink.core import encode_frame, decode_frame
+from lliquidlink.core import encode_frame, decode_frame, RpcTimingStats
 from lliquidlink.server._transport import TcpServerTransport
 from lliquidlink.server.ipc_bridge import IpcBridge
 from lliquidlink.server.server import _handle_client, _resolve_types_in_value
@@ -42,14 +44,29 @@ class FakeWebSocket:
 class FakeBridge:
     """Returns canned results and records calls and notifications."""
 
+    # Default stand-in for the real C#-side RpcTimingStats.ToDict() response, used unless a test
+    # overrides "GetRpcTimingStats" in its own results dict.
+    DEFAULT_CSHARP_STATS = {
+        "rpc_count": 0, "local_processing_time": 0.0, "communication_time": 0.0,
+        "remote_time": 0.0, "total_time": 0.0,
+        "response_network_time": 0.0, "request_network_time": 0.0,
+        "bytes_sent": 0, "bytes_received": 0,
+        "dispatch_queue_time": 0.0, "decode_time": 0.0, "resolve_time": 0.0,
+        "deserialize_args_time": 0.0, "invoke_time": 0.0, "serialize_result_time": 0.0,
+        "encode_time": 0.0, "send_time": 0.0, "overload_attempt_count": 0,
+    }
+
     def __init__(self, results):
         self._results = results
         self.calls = []
         self.notifications = []
+        self.timing_stats = RpcTimingStats(enabled=True)
 
     async def call(self, method, params):
         self.calls.append((method, params))
         if method not in self._results:
+            if method == "GetRpcTimingStats":
+                return self.DEFAULT_CSHARP_STATS
             raise RuntimeError("Method not found: " + method)
         return self._results[method]
 
@@ -119,6 +136,131 @@ async def test_handle_client_add_abbreviated_namespaces():
     assert response["id"] == 2
     assert response["result"] is None
     assert "UnityEngine" in r._abbreviated_namespaces
+
+
+@pytest.mark.asyncio
+async def test_handle_client_get_rpc_timing_stats():
+    """get_rpc_timing_stats returns combined external+ipc+csharp stats, fetching the C# leg via bridge.call."""
+    ws = FakeWebSocket([
+        encode_frame({"jsonrpc": "2.0", "id": 1, "method": "SampleMethodInt", "params": [5]}),
+        encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []}),
+    ])
+    bridge = FakeBridge({"SampleMethodInt": 5})
+    await _handle_client(ws, bridge, _resolver())
+
+    response = decode_frame(ws.sent[1])
+    assert response["id"] == 2
+    assert response["result"]["external"]["rpc_count"] == 1
+    assert response["result"]["ipc"] == bridge.timing_stats.to_dict()
+    assert response["result"]["csharp"] == FakeBridge.DEFAULT_CSHARP_STATS
+    # Fetching stats now also forwards a "GetRpcTimingStats" call to C# to get its own leg's stats.
+    assert [c[0] for c in bridge.calls] == ["SampleMethodInt", "GetRpcTimingStats"]
+
+
+@pytest.mark.asyncio
+async def test_handle_client_request_network_time_and_response_echoes_sent_at():
+    """A request carrying sent_at yields request_network_time > 0 and gets sent_at echoed back."""
+    req1 = encode_frame({"jsonrpc": "2.0", "id": 1, "method": "SampleMethodInt", "params": [5],
+                          "sent_at": time.time() - 0.01})
+    ws = FakeWebSocket([
+        req1,
+        encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []}),
+    ])
+    bridge = FakeBridge({"SampleMethodInt": 5})
+    await _handle_client(ws, bridge, _resolver())
+
+    main_response = decode_frame(ws.sent[0])
+    assert "sent_at" in main_response
+    assert "received_at" in main_response
+
+    stats_response = decode_frame(ws.sent[1])
+    assert stats_response["result"]["external"]["request_network_time"] > 0.0
+
+
+@pytest.mark.asyncio
+async def test_handle_client_records_local_and_remote_time_split():
+    """remote_time covers the bridge.call wait; local_processing_time covers decode + resolve +
+    response encode/send. Recording now happens after ws.send (was before), so this also
+    guards against local_processing_time silently excluding the encode/send it should cover."""
+    ws = FakeWebSocket([
+        encode_frame({"jsonrpc": "2.0", "id": 1, "method": "SampleMethodInt", "params": [5]}),
+        encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []}),
+    ])
+    bridge = FakeBridge({"SampleMethodInt": 5})
+    await _handle_client(ws, bridge, _resolver())
+
+    stats = decode_frame(ws.sent[1])["result"]["external"]
+    assert stats["remote_time"] >= 0.0
+    assert stats["local_processing_time"] >= 0.0
+    assert stats["total_time"] == pytest.approx(
+        stats["local_processing_time"] + stats["communication_time"] + stats["remote_time"])
+
+
+@pytest.mark.asyncio
+async def test_handle_client_response_has_no_sent_at_when_request_lacks_one():
+    """Gating fix: the gateway must not add a new payload field for clients with timing off."""
+    ws = FakeWebSocket([encode_frame(
+        {"jsonrpc": "2.0", "id": 1, "method": "SampleMethodInt", "params": [5]})])
+    await _handle_client(ws, FakeBridge({"SampleMethodInt": 5}), _resolver())
+    response = decode_frame(ws.sent[0])
+    assert "sent_at" not in response
+    assert "received_at" not in response
+
+
+@pytest.mark.asyncio
+async def test_handle_client_records_bytes_across_receive_and_send():
+    req1 = encode_frame({"jsonrpc": "2.0", "id": 1, "method": "SampleMethodInt", "params": [5]})
+    req2 = encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []})
+    ws = FakeWebSocket([req1, req2])
+    bridge = FakeBridge({"SampleMethodInt": 5})
+    await _handle_client(ws, bridge, _resolver())
+
+    stats = decode_frame(ws.sent[1])["result"]["external"]
+    # Both requests have already crossed the wire by the time this snapshot is taken.
+    assert stats["bytes_received"] == len(req1) + len(req2)
+    # Only the main RPC's own response was sent before this snapshot (get_rpc_timing_stats
+    # never counts its own not-yet-sent response, mirroring the existing rpc_count exclusion).
+    assert stats["bytes_sent"] == len(ws.sent[0])
+
+
+@pytest.mark.asyncio
+async def test_handle_client_records_bytes_for_add_abbreviated_classes():
+    req1 = encode_frame(
+        {"jsonrpc": "2.0", "id": 1, "method": "add_abbreviated_classes", "params": ["MyClass"]})
+    req2 = encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []})
+    ws = FakeWebSocket([req1, req2])
+    await _handle_client(ws, FakeBridge({}), _resolver())
+
+    stats = decode_frame(ws.sent[1])["result"]["external"]
+    assert stats["bytes_received"] == len(req1) + len(req2)
+    assert stats["bytes_sent"] == len(ws.sent[0])
+
+
+@pytest.mark.asyncio
+async def test_handle_client_records_bytes_for_add_abbreviated_namespaces():
+    r = _type_resolver_with(["UnityEngine.Object"])
+    req1 = encode_frame({"jsonrpc": "2.0", "id": 1, "method": "add_abbreviated_namespaces",
+                          "params": [["UnityEngine"]]})
+    req2 = encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []})
+    ws = FakeWebSocket([req1, req2])
+    await _handle_client(ws, FakeBridge({}), _resolver(), r)
+
+    stats = decode_frame(ws.sent[1])["result"]["external"]
+    assert stats["bytes_received"] == len(req1) + len(req2)
+    assert stats["bytes_sent"] == len(ws.sent[0])
+
+
+@pytest.mark.asyncio
+async def test_handle_client_records_bytes_for_notification():
+    req1 = encode_frame({"jsonrpc": "2.0", "method": "release_objects", "params": ["[1,2]"]})
+    req2 = encode_frame({"jsonrpc": "2.0", "id": 2, "method": "get_rpc_timing_stats", "params": []})
+    ws = FakeWebSocket([req1, req2])
+    bridge = FakeBridge({})
+    await _handle_client(ws, bridge, _resolver())
+
+    # The notification produced no response, so the only sent frame is the stats response.
+    stats = decode_frame(ws.sent[0])["result"]["external"]
+    assert stats["bytes_received"] == len(req1) + len(req2)
 
 
 @pytest.mark.asyncio

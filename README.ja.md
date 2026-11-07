@@ -17,10 +17,13 @@ Python 側からほぼ Unity C# と同じ構文で呼び出せます。
 ## 特徴
 
 - **Unity C# とほぼ同じ構文で書ける**
-  - C# : `cube.transform.Rotate(30, 45, 0)` Python : `cube.transform.Rotate(30, 45, 0)` 
-  - プロパティチェーン・メソッド呼び出しをそのまま 変換
+  - C# : `GameObject.Find("Cube").transform.position = new Vector3(1, 2, 3);`
+  - Python : `client.GameObject.Find("Cube").transform.position = {"x": 1, "y": 2, "z": 3}` 
+  - プロパティチェーン・メソッド呼び出しをそのまま変換できます
 - **Python からノーコンパイル・型なしで実行できる**
   - C#で必要だったコンパイルや型宣言がPythonでは不要です
+- **Python Scriptingの代替となる**
+  - Unity 6.1からサポート終了予定のPython Scriptingを代替できます
 - **Unity と Python は完全に独立**
   Unity（C#）と Python は JSON-RPC でのみやり取りする別プロセスです。互いに直接のバインディングや DLL 依存を持たないため、ユーザーの好きな Unity バージョン・Python バージョンの組み合わせで動作します。
 - **C# 側で登録済みの機能のみ実行可能**
@@ -98,14 +101,14 @@ python Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/CubeDemo/creat
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
 
-def on_execute(client):
+def run(client):
     cube = client.GameObject.CreatePrimitive(enum("Cube"))
     renderer = cube.GetComponent(type_("Renderer"))
     renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
     cube.transform.Rotate(30, 45, 0)
 
 client = Client(TcpJsonRpcTransport("localhost", 8700))
-client.on_execute += on_execute
+client.run += run
 client.mainloop()
 ```
 

@@ -6,6 +6,20 @@ using System.Text.Json.Serialization;
 namespace LLiquidLink
 {
     /// <summary>
+    /// Strategy injected into a converter (constructor injection) that defines what counts as "null" for the
+    /// converter's original type. Needed for types whose null-ness is not reference equality
+    /// (e.g. Unity's destroyed / fake-null objects). Contravariant, so a checker for a base type can be
+    /// injected into a converter of a derived type.
+    /// </summary>
+    /// <typeparam name="T">The original .NET type the checked values belong to.</typeparam>
+    public interface IRpcNullChecker<in T> where T : class
+    {
+        /// <summary>Return <c>true</c> if <paramref name="value"/> must be written as JSON null.</summary>
+        /// <param name="value">Non-null (by reference) value about to be written.</param>
+        bool IsNull(T value);
+    }
+
+    /// <summary>
     /// Base class for JSON converters that translate between an original .NET type
     /// and an RPC-wire DTO type.
     /// </summary>

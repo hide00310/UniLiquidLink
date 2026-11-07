@@ -26,7 +26,7 @@ public class ConverterTests
         _opts.Converters.Add(new TypeConverter(_resolver));
         _opts.Converters.Add(new EnumConverter());
         _opts.Converters.Add(new PreObjectConverter(_reg));
-        _opts.Converters.Add(new UnityObjectConverter(_reg));
+        _opts.Converters.Add(new UnityObjectConverter(_reg, new UnityObjectNullChecker()));
 
         _primitiveOpts = new JsonSerializerOptions();
         _primitiveOpts.Converters.Add(new ObjectPrimitiveConverter());
@@ -72,6 +72,93 @@ public class ConverterTests
             Assert.AreEqual("UnityEngine.GameObject", doc.GetProperty("orgType").GetString());
             Assert.AreEqual(go.ToString(), doc.GetProperty("name").GetString());
             Assert.IsTrue(doc.TryGetProperty("instanceId", out _));
+        }
+        finally { UnityEngine.Object.DestroyImmediate(go); }
+    }
+
+    [Test]
+    public void UnityObjectConverter_Write_MissingComponent_ProducesJsonNull()
+    {
+        var go = new GameObject("__ConvMissingComponent");
+        try
+        {
+            // In the editor GetComponent returns a fake-null object (== null is true, reference is not null).
+            UnityEngine.Object missing = go.GetComponent(typeof(MeshRenderer));
+            Assume.That(!ReferenceEquals(missing, null), "GetComponent returned a real null; nothing to verify");
+            Assert.IsTrue(missing == null);
+
+            string json = JsonSerializer.Serialize<UnityEngine.Object>(missing, _opts);
+            Assert.AreEqual("null", json);
+        }
+        finally { UnityEngine.Object.DestroyImmediate(go); }
+    }
+
+    [Test]
+    public void UnityObjectConverter_Write_DestroyedObject_ProducesJsonNull()
+    {
+        var go = new GameObject("__ConvDestroyed");
+        UnityEngine.Object.DestroyImmediate(go);
+
+        string json = JsonSerializer.Serialize<UnityEngine.Object>(go, _opts);
+        Assert.AreEqual("null", json);
+    }
+
+    // ─── InstanceObjectConverter: injected IRpcNullChecker ───────────────────
+
+    // Stub checker with a fixed answer, to verify the injection independently of Unity's null semantics.
+    sealed class FixedNullChecker : IRpcNullChecker<UnityEngine.Object>
+    {
+        readonly bool _answer;
+
+        public FixedNullChecker(bool answer) { _answer = answer; }
+
+        public bool IsNull(UnityEngine.Object value) { return _answer; }
+    }
+
+    // Serializer options holding only an InstanceObjectConverter built with the given (possibly null) checker.
+    JsonSerializerOptions OptionsWithChecker(IRpcNullChecker<UnityEngine.Object> checker)
+    {
+        var opts = new JsonSerializerOptions();
+        opts.Converters.Add(new InstanceObjectConverter<UnityEngine.Object>(_reg, checker));
+        return opts;
+    }
+
+    [Test]
+    public void InstanceObjectConverter_Write_InjectedChecker_ReportingNull_WritesJsonNullAndDoesNotRegister()
+    {
+        var go = new GameObject("__ConvInjectedNull");
+        try
+        {
+            string json = JsonSerializer.Serialize<UnityEngine.Object>(go, OptionsWithChecker(new FixedNullChecker(true)));
+            Assert.AreEqual("null", json);
+            Assert.IsNull(_reg.GetObject(go.GetInstanceID()), "a value reported as null must not be registered");
+        }
+        finally { UnityEngine.Object.DestroyImmediate(go); }
+    }
+
+    [Test]
+    public void InstanceObjectConverter_Write_InjectedChecker_ReportingNotNull_WritesDescriptor()
+    {
+        var go = new GameObject("__ConvInjectedNotNull");
+        try
+        {
+            string json = JsonSerializer.Serialize<UnityEngine.Object>(go, OptionsWithChecker(new FixedNullChecker(false)));
+            var doc = JsonDocument.Parse(json).RootElement;
+            Assert.AreEqual("UnityEngine.GameObject", doc.GetProperty("orgType").GetString());
+            Assert.AreEqual(go, _reg.GetObject(doc.GetProperty("instanceId").GetInt64()));
+        }
+        finally { UnityEngine.Object.DestroyImmediate(go); }
+    }
+
+    [Test]
+    public void InstanceObjectConverter_Write_NoChecker_WritesDescriptorForLiveObject()
+    {
+        var go = new GameObject("__ConvNoChecker");
+        try
+        {
+            string json = JsonSerializer.Serialize<UnityEngine.Object>(go, OptionsWithChecker(null));
+            var doc = JsonDocument.Parse(json).RootElement;
+            Assert.AreEqual("UnityEngine.GameObject", doc.GetProperty("orgType").GetString());
         }
         finally { UnityEngine.Object.DestroyImmediate(go); }
     }

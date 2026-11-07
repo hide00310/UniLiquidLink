@@ -10,6 +10,7 @@ from ._rpc import (
     encode_frame,
     decode_frame,
 )
+from ._timing import RpcTimingStats
 
 __all__ = [
     "ByteStream",
@@ -19,4 +20,5 @@ __all__ = [
     "RpcError",
     "encode_frame",
     "decode_frame",
+    "RpcTimingStats",
 ]
