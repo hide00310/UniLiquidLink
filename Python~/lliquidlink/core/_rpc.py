@@ -39,6 +39,11 @@ class ConnectionClosedError(Exception):
 class RpcError(Exception):
     """Raised when the server returns a JSON-RPC error response."""
 
+    # Method name of the failed call; set by JsonRpcPeer.request(), None if raised elsewhere.
+    method: Optional[str] = None
+    # Params of the failed call; set by JsonRpcPeer.request(), None if raised elsewhere.
+    params: Optional[List[Any]] = None
+
 
 def encode_frame(msg: Dict[str, Any], default: Optional[Callable[[Any], Any]] = None) -> bytes:
     """Encode a message as a 4-byte little-endian length prefix + JSON body.
@@ -152,7 +157,17 @@ class JsonRpcPeer:
             await self._stream.send(encode_frame(msg, self._default))
             await slot.event.wait()
         if slot.error is not None:
-            raise Exception(slot.error, f'{method}({params})')
+            error = slot.error
+            if isinstance(error, RpcError):
+                # Keep the RpcError type and message (callers catch RpcError and the goldens
+                # compare the text); attach the failing call as attributes and, on Python 3.11+,
+                # as a traceback note. Other errors (e.g. ConnectionClosedError) are one instance
+                # shared by every pending slot, so they are raised untouched.
+                error.method = method
+                error.params = params
+                if hasattr(error, "add_note"):
+                    error.add_note(f"{method}({params})")
+            raise error
         return slot.result
 
     async def notify(self, method: str, params: List[Any]) -> None:

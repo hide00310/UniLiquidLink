@@ -89,8 +89,12 @@ async def test_error_response_raises():
     peer = JsonRpcPeer(LoopbackStream(responder))
     async with anyio.create_task_group() as tg:
         tg.start_soon(peer.serve)
-        with pytest.raises(RpcError, match="boom"):
-            await peer.request("Fail", [])
+        with pytest.raises(RpcError, match="boom") as excinfo:
+            await peer.request("Fail", [1, "a"])
+        # The failing call is attached without changing the exception type or message.
+        assert str(excinfo.value) == "boom"
+        assert excinfo.value.method == "Fail"
+        assert excinfo.value.params == [1, "a"]
         await peer.aclose()
         tg.cancel_scope.cancel()
 
