@@ -103,10 +103,10 @@ Client that connects to a Unity Editor server and sends RPC commands.
 ### Methods
 - `__getattr__(name: str)` — Treat any undefined non-underscore attribute as a Unity RPC method.
 - `flush_releases()` — Send pending object releases now (callable from a worker thread).
-- `mainloop()` — Connect, run on_execute in a worker thread, flush, then disconnect.
+- `mainloop()` — Connect, dispatch the run event in a worker thread, flush, then disconnect.
 - `connect()` — Open the connection to the Unity server.
 - `disconnect()` — Close the connection to the Unity server.
-- `execute(on_execute: Callable[[Client], None])` — Run a callback in a worker thread with this client as its argument.
+- `execute(run: Callable[[Client], None])` — Run a callback in a worker thread with this client as its argument.
 - `add_abbreviated_classes(class_names: List[str])` — Register a class name whose methods can be called without namespace prefix.
 - `add_abbreviated_namespaces(namespaces: List[str])` — Register namespaces whose types can be referred to by simple name.
 

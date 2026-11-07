@@ -82,7 +82,7 @@ lliquidlink.core._rpc.StdioByteStream --|> lliquidlink.core._interfaces.ByteStre
 lliquidlink.server._transport.TcpServerTransport --|> lliquidlink.server._transport.ServerTransport
 lliquidlink.server._transport._TcpConnection --|> lliquidlink.server._interfaces.MessageStream
 lliquidlink.server.ipc_bridge.IpcBridge --|> lliquidlink.server._interfaces.RpcBridge
-lliquidlink.client._client.Client *-- lliquidlink.client._event.Event : on_execute
+lliquidlink.client._client.Client *-- lliquidlink.client._event.Event : run
 lliquidlink.client._client.Client *-- lliquidlink.client._identity_cache.ObjectIdentityCache : _object_cache
 lliquidlink.client._client.Client *-- lliquidlink.client._options.ClientOptions : options
 lliquidlink.client._options.ClientOptions *-- lliquidlink.client._options.RpcTimingOption : rpc_timing
