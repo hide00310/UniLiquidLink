@@ -1,5 +1,7 @@
 """Unit tests for the shared JsonRpcPeer core over an in-memory byte stream."""
+import gc
 import time
+import weakref
 
 import anyio
 import pytest
@@ -67,6 +69,27 @@ def _echo_with_received_at(msg):
     sent_at = received_at + 0.05      # remote_time ~= 0.05s
     return {"jsonrpc": "2.0", "id": msg["id"], "result": msg["params"][0],
             "received_at": received_at, "sent_at": sent_at}
+
+
+class _Probe:
+    """Weak-referenceable stand-in for an ObjectProxy produced by the object hook."""
+
+
+@pytest.mark.anyio
+async def test_serve_loop_does_not_retain_decoded_result():
+    # Release batching relies on a proxy being collectable as soon as the caller drops it,
+    # so the receive loop must not keep the last decoded message (and its result) alive.
+    peer = JsonRpcPeer(
+        LoopbackStream(_echo), object_hook=lambda d: _Probe() if "probe" in d else d)
+    async with anyio.create_task_group() as tg:
+        tg.start_soon(peer.serve)
+        result = await peer.request("Echo", [{"probe": 1}])
+        ref = weakref.ref(result)
+        del result
+        gc.collect()
+        assert ref() is None
+        await peer.aclose()
+        tg.cancel_scope.cancel()
 
 
 @pytest.mark.anyio

@@ -196,6 +196,10 @@ class JsonRpcPeer:
                 msg = json.loads(body, object_hook=self._object_hook)
                 decode_time = time.perf_counter() - decode_start
                 self._dispatch(msg, received_at, decode_time)
+                # Drop the reference: this frame stays alive while awaiting the next frame, and
+                # a decoded ObjectProxy in `msg` would otherwise never be garbage-collected, so
+                # its Unity-side release would never be scheduled.
+                msg = None
         finally:
             self._reject_all(ConnectionClosedError("Connection closed"))
 
