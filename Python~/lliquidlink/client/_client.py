@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class Client:
     """Client that connects to a Unity Editor server and sends RPC commands.
 
-    Register a handler on the :attr:`on_execute` event with ``+=``, then call
+    Register a handler on the :attr:`run` event with ``+=``, then call
     :meth:`mainloop`.
     """
 
@@ -29,7 +29,8 @@ class Client:
         self._serialization: Serialization = Serialization(self._make_object_proxy)
         transport.bind_codec(self._serialization)
         self._release: ReleaseManager = ReleaseManager(transport, verify=verify_releases)
-        self.on_execute: Event = Event()
+        # Handlers registered with ``+=`` are invoked with this client in a worker thread by mainloop().
+        self.run: Event = Event()
         # Optional client features (e.g. RPC timing); see options.rpc_timing.
         self.options: ClientOptions = ClientOptions(transport)
 
@@ -61,13 +62,13 @@ class Client:
         return not self._transport.closed
 
     def mainloop(self) -> None:
-        """Connect, run on_execute in a worker thread, flush, then disconnect."""
+        """Connect, dispatch the run event in a worker thread, flush, then disconnect."""
         anyio.run(self._amain)
 
     async def _amain(self) -> None:
         await self._transport.open()
         try:
-            await self.execute(self.on_execute)
+            await self.execute(self.run)
             await self._release.flush_async()
         finally:
             await self._transport.aclose()
@@ -80,9 +81,9 @@ class Client:
         """Close the connection to the Unity server."""
         await self._transport.aclose()
 
-    async def execute(self, on_execute: Callable[[Client], None]) -> None:
+    async def execute(self, run: Callable[[Client], None]) -> None:
         """Run a callback in a worker thread with this client as its argument."""
-        await anyio.to_thread.run_sync(on_execute, self)
+        await anyio.to_thread.run_sync(run, self)
 
     def add_abbreviated_classes(self, class_names: List[str]) -> None:
         """Register a class name whose methods can be called without namespace prefix."""

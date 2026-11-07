@@ -117,7 +117,7 @@ async def test_client_over_tcp():
 
 
 @pytest.mark.anyio
-async def test_on_execute_receives_client_over_tcp():
+async def test_run_receives_client_over_tcp():
     received = []
 
     def handler(client):
@@ -125,10 +125,10 @@ async def test_on_execute_receives_client_over_tcp():
 
     async with _FakeTcpServer(HOST, PORT):
         client = Client(TcpJsonRpcTransport(HOST, PORT))
-        client.on_execute += handler
+        client.run += handler
         await client.connect()
         try:
-            await client.execute(client.on_execute)
+            await client.execute(client.run)
         finally:
             await client.disconnect()
 
@@ -136,7 +136,7 @@ async def test_on_execute_receives_client_over_tcp():
 
 
 @pytest.mark.anyio
-async def test_on_execute_multiple_handlers_dispatch_in_order():
+async def test_run_multiple_handlers_dispatch_in_order():
     order = []
 
     def first(client):
@@ -146,10 +146,10 @@ async def test_on_execute_multiple_handlers_dispatch_in_order():
         order.append("second")
 
     client = Client(TcpJsonRpcTransport(HOST, PORT))
-    client.on_execute += first
-    client.on_execute += second
+    client.run += first
+    client.run += second
 
-    await client.execute(client.on_execute)
+    await client.execute(client.run)
 
     assert order == ["first", "second"]
 

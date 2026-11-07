@@ -26,7 +26,7 @@ class IntegrationClient(Client):
     def __init__(self):
         super().__init__(TcpJsonRpcTransport("localhost", 8700), verify_releases=True)
         self.captured = {}
-        self.on_execute += self._on_execute
+        self.run += self._run
 
     def _try(self, fn):
         try:
@@ -221,7 +221,7 @@ class IntegrationClient(Client):
             }
         return self._try(scenario)
 
-    def _on_execute(self, _client):
+    def _run(self, _client):
         self.add_abbreviated_classes(["GameObject", "UniLiquidLinkIntegrationTest", "AssetDatabase"])
         self.add_abbreviated_namespaces(["UnityEngine"])
         self.captured = {

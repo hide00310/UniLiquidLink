@@ -98,14 +98,14 @@ python Assets/Samples/UniLiquidLink/<version>/UniLiquidLinkSample/CubeDemo/creat
 from lliquidlink.client import Client, TcpJsonRpcTransport
 from lliquidlink.client.models import type_, enum
 
-def on_execute(client):
+def run(client):
     cube = client.GameObject.CreatePrimitive(enum("Cube"))
     renderer = cube.GetComponent(type_("Renderer"))
     renderer.material.color = {"r": 1, "g": 0, "b": 0, "a": 1}
     cube.transform.Rotate(30, 45, 0)
 
 client = Client(TcpJsonRpcTransport("localhost", 8700))
-client.on_execute += on_execute
+client.run += run
 client.mainloop()
 ```
 

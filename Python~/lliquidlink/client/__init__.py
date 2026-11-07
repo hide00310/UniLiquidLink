@@ -2,12 +2,12 @@
 
 Usage::
 
-    def on_execute(client):
+    def run(client):
         go = client.Find("Player")
         go.transform.Rotate(0, 90, 0)
 
     client = Client(TcpJsonRpcTransport("localhost", 8700))
-    client.on_execute += on_execute
+    client.run += run
     client.mainloop()
 """
 from __future__ import annotations
